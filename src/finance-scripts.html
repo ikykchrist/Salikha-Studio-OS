@@ -1,0 +1,664 @@
+﻿<!-- finance-scripts.html
+     Cashflow page controller (Sprint 1). Renders summary, accounts,
+     and transaction history; opens modals for record/transfer/account/
+     reconciliation; refreshes affected sections after server calls. -->
+
+<script>
+(function () {
+  'use strict';
+
+  var state = {
+    accounts: [],
+    categories: [],
+    initialized: false,
+    configuring: false,
+    activeIdempotencyKey: null
+  };
+
+  function el(id) {
+    return document.getElementById(id);
+  }
+
+  function section() {
+    return el('view-cashflow');
+  }
+
+  function today() {
+    var d = new Date();
+    var month = String(d.getMonth() + 1).padStart(2, '0');
+    var day = String(d.getDate()).padStart(2, '0');
+    return d.getFullYear() + '-' + month + '-' + day;
+  }
+
+  function callServer(fnName, args, onOk) {
+    var run = google.script.run
+      .withSuccessHandler(function (response) {
+        if (response && response.success) {
+          if (onOk) {
+            onOk(response.data, response);
+          }
+        } else {
+          handleFailure(response);
+        }
+      })
+      .withFailureHandler(handleFailure);
+    if (args !== undefined) {
+      run[fnName](args);
+    } else {
+      run[fnName]();
+    }
+  }
+
+  function handleFailure(response) {
+    var message = toastMessageFromResponse(response, 'cashflow');
+    APP.toast(message, 'error');
+    var status = el('finance-status');
+    if (status) {
+      status.innerHTML = FIN_UI.initStateBanner({ message: message, tone: 'alert-danger' });
+      status.hidden = false;
+    }
+  }
+
+  function setStatus(html, tone) {
+    var status = el('finance-status');
+    if (!status) {
+      return;
+    }
+    if (html) {
+      status.innerHTML = FIN_UI.initStateBanner({ message: html, tone: tone || 'alert-info' });
+      status.hidden = false;
+    } else {
+      status.hidden = true;
+      status.innerHTML = '';
+    }
+  }
+
+  function renderSummary(summary) {
+    el('kpi-total-cash').textContent = FIN_UI.money(summary.totalAvailableCash);
+    el('kpi-total-cash-meta').textContent = summary.accounts.length + ' active account(s)';
+    el('kpi-inflows').textContent = FIN_UI.money(summary.periodInflows);
+    el('kpi-outflows').textContent = FIN_UI.money(summary.periodOutflows);
+    el('kpi-net').textContent = FIN_UI.money(summary.netCashMovement);
+
+    var items = [
+      ['General revenue', summary.generalRevenue, 'success'],
+      ['Operating expenses', summary.operatingExpenses, 'warning'],
+      ['Capital expenses', summary.capitalExpenses, 'info'],
+      ['Owner capital', summary.ownerCapital, 'neutral'],
+      ['Owner withdrawals', summary.ownerWithdrawals, 'neutral'],
+      ['Adjustments (net)', summary.adjustmentsIn - summary.adjustmentsOut, 'neutral']
+    ];
+    var html = '';
+    for (var i = 0; i < items.length; i++) {
+      var item = items[i];
+      html += '<div class="breakdown-item">' +
+        '<span class="breakdown-label">' + FIN_UI.esc(item[0]) + '</span>' +
+        '<span class="breakdown-value">' + FIN_UI.money(item[1]) + '</span>' +
+        UI.badge(item[0], item[2]) +
+        '</div>';
+    }
+    el('finance-breakdown-grid').innerHTML = html;
+  }
+
+  function renderAccounts(accounts) {
+    var active = [];
+    var inactive = [];
+    for (var i = 0; i < accounts.length; i++) {
+      if (accounts[i].isActive === false) {
+        inactive.push(accounts[i]);
+      } else {
+        active.push(accounts[i]);
+      }
+    }
+    var html = '';
+    for (var a = 0; a < active.length; a++) {
+      html += FIN_UI.accountCard(active[a]);
+    }
+    if (inactive.length > 0) {
+      html += '<div class="account-meta mt-3">' + inactive.length + ' inactive account(s) with preserved history.</div>';
+    }
+    if (!html) {
+      html = '<div class="account-empty">No cash accounts yet. Add one to begin.</div>';
+    }
+    el('finance-accounts-list').innerHTML = html;
+  }
+
+  function renderTransactions(transactions) {
+    var accountMap = {};
+    var categoryMap = {};
+    for (var i = 0; i < state.accounts.length; i++) {
+      accountMap[state.accounts[i].accountId] = state.accounts[i].accountName;
+    }
+    for (var c = 0; c < state.categories.length; c++) {
+      categoryMap[state.categories[c].categoryId] = state.categories[c].categoryName;
+    }
+    var tbody = el('finance-tx-body');
+    if (!transactions.length) {
+      tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state">' +
+        '<p class="empty-title">No transactions yet</p>' +
+        '<p class="empty-hint">Post general income or an operating expense to start the ledger.</p></div></td></tr>';
+      return;
+    }
+    var html = '';
+    for (var t = 0; t < transactions.length; t++) {
+      html += FIN_UI.txRow(transactions[t], accountMap, categoryMap);
+    }
+    tbody.innerHTML = html;
+    el('finance-tx-count').textContent = 'Showing ' + transactions.length;
+  }
+
+  function refreshFinance() {
+    setStatus(null);
+    callServer('getCashAccounts', undefined, function (accounts) {
+      state.accounts = accounts;
+      renderAccounts(accounts);
+    });
+    callServer('getFinancialCategories', undefined, function (categories) {
+      state.categories = categories;
+    });
+    callServer('getFinanceDashboardSummary', undefined, function (summary) {
+      renderSummary(summary);
+      renderTransactions(summary.recentTransactions);
+    });
+  }
+
+  function loadStatus() {
+    var status = el('finance-status');
+    if (status) {
+      status.innerHTML = '<div class="skeleton" style="height:20px;width:60%;max-width:420px"></div>';
+      status.hidden = false;
+    }
+    callServer('getFinanceInitializationStatus', undefined, function (info) {
+      if (!info.spreadsheetConfigured) {
+        state.initialized = false;
+        state.configuring = true;
+        setStatus('SPREADSHEET_ID is not configured yet. Set it in Apps Script properties (see docs/DEPLOYMENT_GUIDE.md), then reload.', 'alert-warning');
+        return;
+      }
+      if (!info.initialized) {
+        state.initialized = false;
+        setStatus('The financial database is not initialized. Create the Sprint 1 sheets to continue.', 'alert-info');
+        addInitButton();
+        return;
+      }
+      state.initialized = true;
+      setStatus(null);
+      refreshFinance();
+    });
+  }
+
+  function addInitButton() {
+    var status = el('finance-status');
+    if (!status) {
+      return;
+    }
+    var button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'btn btn-primary mt-2';
+    button.textContent = 'Initialize database';
+    button.addEventListener('click', function () {
+      button.disabled = true;
+      button.textContent = 'Initializing\u2026';
+      callServer('initializeDatabase', undefined, function (result) {
+        APP.toast('Database initialized (schema v' + result.schemaVersion + ').', 'success');
+        state.initialized = true;
+        setStatus(null);
+        refreshFinance();
+      });
+    });
+    status.appendChild(button);
+  }
+
+  /* ---------- Modals ---------- */
+
+  function openModal(title, bodyHtml, confirmLabel, onConfirm) {
+    var footer = '<button class="btn btn-ghost" type="button" data-modal-close>Cancel</button>' +
+      '<button class="btn btn-primary" type="button" id="finance-modal-confirm">' + FIN_UI.esc(confirmLabel) + '</button>';
+    APP.openModal(UI.modal(title, bodyHtml, footer));
+    var confirmBtn = el('finance-modal-confirm');
+    if (confirmBtn) {
+      confirmBtn.addEventListener('click', function () {
+        if (onConfirm) {
+          onConfirm(confirmBtn);
+        }
+      });
+    }
+  }
+
+  function openRecordModal() {
+    var html = FIN_UI.transactionFormTpl(state.accounts, state.categories, today());
+    openModal('Record transaction', html, 'Post transaction', function (confirmBtn) {
+      submitTransaction(confirmBtn);
+    });
+    wireKindChange();
+  }
+
+  function wireKindChange() {
+    var kind = el('ft-kind');
+    if (!kind) {
+      return;
+    }
+    kind.addEventListener('change', function () {
+      updateCategoryFilter();
+      updateFundWarning();
+    });
+    var account = el('ft-account');
+    if (account) {
+      account.addEventListener('change', updateFundWarning);
+    }
+    var amount = el('ft-amount');
+    if (amount) {
+      amount.addEventListener('input', updateFundWarning);
+    }
+    updateCategoryFilter();
+    updateFundWarning();
+  }
+
+  function updateCategoryFilter() {
+    var kind = el('ft-kind');
+    var category = el('ft-category');
+    if (!kind || !category) {
+      return;
+    }
+    var meta = FIN_UI.KIND_META[kind.value];
+    var filtered = state.categories.filter(function (c) {
+      return c.isActive !== false && matchesKindType(meta.type, c.categoryType);
+    });
+    category.innerHTML = FIN_UI.categoryOptions(filtered);
+  }
+
+  function matchesKindType(txType, categoryType) {
+    switch (txType) {
+      case 'GENERAL_INCOME': return categoryType === 'INCOME';
+      case 'OPERATING_EXPENSE': return categoryType === 'OPERATING_EXPENSE';
+      case 'CAPITAL_EXPENSE': return categoryType === 'CAPITAL_EXPENSE';
+      case 'OWNER_CAPITAL': return categoryType === 'OWNER_CAPITAL';
+      case 'OWNER_WITHDRAWAL': return categoryType === 'OWNER_WITHDRAWAL';
+      default: return true;
+    }
+  }
+
+  function updateFundWarning() {
+    var kind = el('ft-kind');
+    var account = el('ft-account');
+    var amount = el('ft-amount');
+    var error = el('ft-error');
+    if (!kind || !account || !amount || !error) {
+      return;
+    }
+    var isOutflow = kind.value === 'operating-expense' || kind.value === 'capital-expense' || kind.value === 'owner-withdrawal';
+    var value = Number(amount.value || 0);
+    if (!isOutflow || value <= 0) {
+      error.hidden = true;
+      return;
+    }
+    var acc = findAccount(account.value);
+    if (acc && value > Number(acc.currentBalanceCached)) {
+      error.textContent = 'Warning: this amount exceeds the account balance of ' + FIN_UI.money(acc.currentBalanceCached) + '.';
+      error.hidden = false;
+    } else {
+      error.hidden = true;
+    }
+  }
+
+  function findAccount(accountId) {
+    for (var i = 0; i < state.accounts.length; i++) {
+      if (String(state.accounts[i].accountId) === String(accountId)) {
+        return state.accounts[i];
+      }
+    }
+    return null;
+  }
+
+  function formError(id, message) {
+    var node = el(id);
+    if (node) {
+      node.textContent = message;
+      node.hidden = false;
+    }
+  }
+
+  function submitTransaction(confirmBtn) {
+    var kind = el('ft-kind').value;
+    var meta = FIN_UI.KIND_META[kind];
+    if (!meta) {
+      formError('ft-error', 'Please choose a transaction kind.');
+      return;
+    }
+    var amount = Number(el('ft-amount').value);
+    if (!amount || amount <= 0) {
+      formError('ft-error', 'Amount must be greater than zero.');
+      return;
+    }
+    var description = el('ft-description').value.trim();
+    if (!description) {
+      formError('ft-error', 'Description is required.');
+      return;
+    }
+    if (state.activeIdempotencyKey) {
+      confirmBtn.disabled = true;
+    }
+    var payload = {
+      kind: kind,
+      transactionDate: el('ft-date').value,
+      accountId: el('ft-account').value,
+      categoryId: el('ft-category').value || null,
+      amount: amount,
+      description: description,
+      counterparty: el('ft-counterparty').value.trim(),
+      referenceNumber: el('ft-reference').value.trim(),
+      idempotencyKey: state.activeIdempotencyKey
+    };
+    var serverFn = serverFnForKind(kind);
+    callServer(serverFn, payload, function (data) {
+      state.activeIdempotencyKey = null;
+      APP.toast(data.duplicate ? 'Transaction was already recorded.' : 'Transaction posted.', data.duplicate ? 'info' : 'success');
+      APP.closeModal();
+      refreshFinance();
+    });
+  }
+
+  function serverFnForKind(kind) {
+    switch (kind) {
+      case 'general-income': return 'recordGeneralIncome';
+      case 'operating-expense': return 'recordOperatingExpense';
+      case 'capital-expense': return 'recordCapitalExpense';
+      case 'owner-capital': return 'recordOwnerCapital';
+      case 'owner-withdrawal': return 'recordOwnerWithdrawal';
+      default: return 'recordGeneralIncome';
+    }
+  }
+
+  function openTransferModal() {
+    var html = FIN_UI.transferFormTpl(state.accounts, today());
+    openModal('Transfer funds', html, 'Complete transfer', function (confirmBtn) {
+      submitTransfer(confirmBtn);
+    });
+    var source = el('ftr-source');
+    var destination = el('ftr-destination');
+    if (source && destination) {
+      source.addEventListener('change', syncDestinationOptions);
+      syncDestinationOptions();
+    }
+  }
+
+  function syncDestinationOptions() {
+    var source = el('ftr-source');
+    var destination = el('ftr-destination');
+    if (!source || !destination) {
+      return;
+    }
+    var others = state.accounts.filter(function (a) {
+      return a.isActive !== false && String(a.accountId) !== String(source.value);
+    });
+    destination.innerHTML = FIN_UI.accountOptions(others);
+  }
+
+  function submitTransfer(confirmBtn) {
+    var source = el('ftr-source').value;
+    var destination = el('ftr-destination').value;
+    if (String(source) === String(destination)) {
+      formError('ftr-error', 'Source and destination accounts must be different.');
+      return;
+    }
+    var amount = Number(el('ftr-amount').value);
+    if (!amount || amount <= 0) {
+      formError('ftr-error', 'Transfer amount must be greater than zero.');
+      return;
+    }
+    var description = el('ftr-description').value.trim();
+    if (!description) {
+      formError('ftr-error', 'Description is required.');
+      return;
+    }
+    var sourceAcc = findAccount(source);
+    if (sourceAcc && amount > Number(sourceAcc.currentBalanceCached)) {
+      formError('ftr-error', 'Insufficient funds: ' + sourceAcc.accountName + ' has ' + FIN_UI.money(sourceAcc.currentBalanceCached) + '.');
+      return;
+    }
+    confirmBtn.disabled = true;
+    callServer('recordAccountTransfer', {
+      sourceAccountId: source,
+      destinationAccountId: destination,
+      amount: amount,
+      description: description,
+      referenceNumber: el('ftr-reference').value.trim(),
+      transferDate: el('ftr-date').value
+    }, function () {
+      APP.toast('Transfer completed.', 'success');
+      APP.closeModal();
+      refreshFinance();
+    });
+  }
+
+  function openAccountModal() {
+    var html = FIN_UI.accountFormTpl();
+    openModal('Add cash account', html, 'Create account', function (confirmBtn) {
+      submitAccount(confirmBtn);
+    });
+    var opening = el('fa-opening-date');
+    if (opening) {
+      opening.value = today();
+    }
+  }
+
+  function submitAccount(confirmBtn) {
+    var name = el('fa-name').value.trim();
+    if (!name) {
+      formError('fa-error', 'Account name is required.');
+      return;
+    }
+    var opening = Number(el('fa-opening').value || 0);
+    if (opening < 0) {
+      formError('fa-error', 'Opening balance cannot be negative.');
+      return;
+    }
+    confirmBtn.disabled = true;
+    callServer('createCashAccount', {
+      accountName: name,
+      accountType: el('fa-type').value,
+      institutionName: el('fa-institution').value.trim(),
+      accountReference: el('fa-reference').value.trim(),
+      openingBalance: opening,
+      openingBalanceDate: el('fa-opening-date').value,
+      notes: el('fa-notes').value.trim()
+    }, function () {
+      APP.toast('Cash account created. Note: opening balance is not revenue.', 'success');
+      APP.closeModal();
+      refreshFinance();
+    });
+  }
+
+  function openReconcileModal() {
+    var html = FIN_UI.reconcileFormTpl(state.accounts, today());
+    openModal('Reconcile cash', html, 'Save reconciliation', function (confirmBtn) {
+      submitReconciliation(confirmBtn);
+    });
+    var date = el('fr-date');
+    var account = el('fr-account');
+    if (date) {
+      date.addEventListener('change', refreshExpected);
+    }
+    if (account) {
+      account.addEventListener('change', refreshExpected);
+    }
+    refreshExpected();
+  }
+
+  function refreshExpected() {
+    var date = el('fr-date');
+    var account = el('fr-account');
+    if (!date || !account) {
+      return;
+    }
+    callServer('getDailyReconciliationData', {
+      accountId: account.value,
+      reconciliationDate: date.value
+    }, function (data) {
+      var expected = el('fr-expected');
+      var difference = el('fr-difference');
+      var actual = el('fr-actual');
+      if (expected) {
+        expected.textContent = 'Expected closing balance: ' + FIN_UI.money(data.expected.expectedClosing);
+      }
+      if (actual) {
+        actual.setAttribute('data-expected', data.expected.expectedClosing);
+        actual.addEventListener('input', function () {
+          var diff = Number(actual.value || 0) - Number(actual.getAttribute('data-expected') || 0);
+          if (difference) {
+            difference.textContent = 'Difference: ' + FIN_UI.money(diff);
+            difference.classList.toggle('text-danger', Math.abs(diff) > 0.005);
+          }
+        });
+      }
+    });
+  }
+
+  function submitReconciliation(confirmBtn) {
+    var date = el('fr-date').value;
+    var account = el('fr-account').value;
+    var actual = Number(el('fr-actual').value);
+    var expected = Number(el('fr-actual').getAttribute('data-expected') || 0);
+    var difference = actual - expected;
+    if (isNaN(actual)) {
+      formError('fr-error', 'Actual closing balance is required.');
+      return;
+    }
+    var explanation = el('fr-explanation').value.trim();
+    if (Math.abs(difference) > 0.005 && !explanation) {
+      formError('fr-error', 'An explanation is required when the difference is not zero.');
+      return;
+    }
+    confirmBtn.disabled = true;
+    callServer('saveDailyCashReconciliation', {
+      accountId: account,
+      reconciliationDate: date,
+      actualClosing: actual,
+      explanation: explanation
+    }, function () {
+      APP.toast('Daily reconciliation saved. The ledger was not adjusted automatically.', 'success');
+      APP.closeModal();
+      refreshFinance();
+    });
+  }
+
+  function openDetailModal(transactionId) {
+    callServer('getCashTransaction', transactionId, function (tx) {
+      var accountMap = {};
+      var categoryMap = {};
+      for (var i = 0; i < state.accounts.length; i++) {
+        accountMap[state.accounts[i].accountId] = state.accounts[i].accountName;
+      }
+      for (var c = 0; c < state.categories.length; c++) {
+        categoryMap[state.categories[c].categoryId] = state.categories[c].categoryName;
+      }
+      var body = FIN_UI.detailViewTpl(tx, accountMap, categoryMap);
+      if (tx.transferPair && tx.transferPair.length) {
+        body += '<p class="detail-note">Linked transfer record: ' + FIN_UI.esc(tx.transferPair[0].transactionId) +
+          ' (' + FIN_UI.typeLabel(tx.transferPair[0].transactionType) + ')</p>';
+      }
+      openModal('Transaction details', body, 'Close', function (btn) {
+        APP.closeModal();
+      });
+      var confirmBtn = el('finance-modal-confirm');
+      if (confirmBtn) {
+        confirmBtn.className = 'btn btn-secondary';
+        confirmBtn.textContent = 'Close';
+      }
+      if (tx.status !== 'VOIDED' && !tx.transferGroupId) {
+        var footer = document.querySelector('#modal-region .modal-foot');
+        if (footer) {
+          var voidBtn = document.createElement('button');
+          voidBtn.type = 'button';
+          voidBtn.className = 'btn btn-danger';
+          voidBtn.textContent = 'Void transaction';
+          voidBtn.addEventListener('click', function () {
+            openVoidConfirm(tx);
+          });
+          footer.appendChild(voidBtn);
+        }
+      }
+    });
+  }
+
+  function openVoidConfirm(tx) {
+    var body = '<p>Void transaction ' + FIN_UI.esc(tx.transactionId) + ' (' + FIN_UI.typeLabel(tx.transactionType) +
+      ', ' + FIN_UI.money(tx.amount) + ')? The record stays visible and the balance is recalculated.</p>' +
+      '<div class="field"><label class="field-label">Void reason</label>' +
+      '<textarea class="field-textarea" id="fv-reason" maxlength="300" required></textarea></div>' +
+      '<div class="field-error" id="fv-error" hidden></div>';
+    openModal('Void transaction', body, 'Confirm void', function (confirmBtn) {
+      submitVoid(tx.transactionId, confirmBtn);
+    });
+    var confirmBtn = el('finance-modal-confirm');
+    if (confirmBtn) {
+      confirmBtn.className = 'btn btn-danger';
+    }
+  }
+
+  function submitVoid(transactionId, confirmBtn) {
+    var reason = el('fv-reason').value.trim();
+    if (!reason) {
+      formError('fv-error', 'A void reason is required.');
+      return;
+    }
+    confirmBtn.disabled = true;
+    callServer('voidCashTransaction', {
+      transactionId: transactionId,
+      voidReason: reason
+    }, function () {
+      APP.toast('Transaction voided. History preserved.', 'success');
+      APP.closeModal();
+      refreshFinance();
+    });
+  }
+
+  /* ---------- Events ---------- */
+
+  function onSectionClick(event) {
+    var target = event.target;
+    var action = target.closest('[data-finance-action]');
+    if (action) {
+      switch (action.getAttribute('data-finance-action')) {
+        case 'record': openRecordModal(); break;
+        case 'transfer': openTransferModal(); break;
+        case 'add-account': openAccountModal(); break;
+        case 'reconcile': openReconcileModal(); break;
+      }
+      return;
+    }
+    var detail = target.closest('[data-tx-detail]');
+    if (detail) {
+      openDetailModal(detail.getAttribute('data-tx-detail'));
+      return;
+    }
+    var voidBtn = target.closest('[data-tx-void]');
+    if (voidBtn) {
+      callServer('getCashTransaction', voidBtn.getAttribute('data-tx-void'), function (tx) {
+        openVoidConfirm(tx);
+      });
+    }
+  }
+
+  /* ---------- Lifecycle ---------- */
+
+  var activated = false;
+
+  function activate() {
+    if (!activated) {
+      activated = true;
+      section().addEventListener('click', onSectionClick);
+      loadStatus();
+    } else {
+      refreshFinance();
+    }
+  }
+
+  window.FINANCE = {
+    activate: activate,
+    refreshFinance: refreshFinance,
+    loadStatus: loadStatus
+  };
+})();
+</script>
+

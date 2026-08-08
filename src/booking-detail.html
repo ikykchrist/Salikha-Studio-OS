@@ -1,0 +1,32 @@
+<!-- booking-detail.html
+     Booking detail workspace (Sprint 3): header + tabs. Rendered by
+     booking-scripts.html into a full-screen overlay. -->
+
+<section id="booking-detail-workspace" class="detail-workspace" hidden aria-label="Booking details">
+  <div class="detail-head">
+    <div>
+      <h2 class="detail-title" id="bd-title">Booking</h2>
+      <p class="section-hint" id="bd-subtitle"></p>
+    </div>
+    <div class="section-actions">
+      <button class="btn btn-ghost" type="button" id="bd-close">Close</button>
+    </div>
+  </div>
+
+  <div class="detail-badges" id="bd-badges"></div>
+
+  <div class="tabs" role="tablist" aria-label="Booking sections">
+    <button class="tab active" type="button" role="tab" data-bd-tab="overview">Overview</button>
+    <button class="tab" type="button" role="tab" data-bd-tab="payments">Payments</button>
+    <button class="tab" type="button" role="tab" data-bd-tab="pricing">Pricing</button>
+    <button class="tab" type="button" role="tab" data-bd-tab="profitability">Profitability</button>
+    <button class="tab" type="button" role="tab" data-bd-tab="schedule">Schedule</button>
+    <button class="tab" type="button" role="tab" data-bd-tab="timeline">Timeline</button>
+    <button class="tab" type="button" role="tab" data-bd-tab="activity">Activity</button>
+    <button class="tab tab-disabled" type="button" role="tab" disabled>Production</button>
+    <button class="tab tab-disabled" type="button" role="tab" disabled>Deployment</button>
+    <button class="tab tab-disabled" type="button" role="tab" disabled>Files</button>
+  </div>
+
+  <div class="detail-body" id="bd-body"></div>
+</section>

@@ -1,0 +1,168 @@
+<!-- setup-scripts.html
+     System setup controller. Reads the read-only setup status and
+     renders it; initialization is idempotent and re-runnable, and the
+     server enforces the owner/authorization posture. -->
+
+<script>
+(function () {
+  'use strict';
+
+  var STEP_LABELS = {
+    account: 'Google account',
+    database: 'Business database',
+    schema: 'Database schema',
+    drive: 'Root Drive folder',
+    automation: 'Automation triggers',
+    calendar: 'Calendar integration',
+    backup: 'Backup configuration',
+    security: 'Security baseline',
+    authorization: 'Initialization access',
+    health: 'Health check'
+  };
+
+  var TONE_BY_STATUS = {
+    SUCCESS: 'success',
+    WARNING: 'warning',
+    FAILED: 'danger',
+    UNKNOWN: 'neutral'
+  };
+
+  var state = {
+    initialized: false,
+    busy: false,
+    bound: false
+  };
+
+  function el(id) {
+    return document.getElementById(id);
+  }
+
+  function badgeFor(status) {
+    var tone = TONE_BY_STATUS[status] || 'neutral';
+    var text = String(status || 'UNKNOWN');
+    return UI.badge(text.charAt(0) + text.slice(1).toLowerCase(), tone);
+  }
+
+  function render(payload) {
+    if (!payload) {
+      return;
+    }
+    state.initialized = !!payload.initialized;
+
+    el('setup-overall-badge').innerHTML = badgeFor(payload.overallStatus);
+    if (payload.setupVersion) {
+      el('setup-overall-badge').title = 'Setup version ' + payload.setupVersion;
+    }
+
+    var user = payload.user || {};
+    var userHtml;
+    if (user.email) {
+      userHtml = '<span class="setup-user-label">Signed in</span>' +
+        ' ' + UI.escapeHtml(user.name || user.email) +
+        ' <span class="setup-user-email">' + UI.escapeHtml(user.email) + '</span>';
+    } else {
+      userHtml = '<span class="setup-user-label">No active session detected. Sign in with your Google account.</span>';
+    }
+    el('setup-user').innerHTML = userHtml;
+
+    var stepsHtml = '';
+    var steps = payload.steps || [];
+    for (var i = 0; i < steps.length; i++) {
+      var step = steps[i];
+      var detail = step.detail
+        ? '<span class="setup-step-detail">' + UI.escapeHtml(step.detail) + '</span>'
+        : '';
+      stepsHtml += '<li class="setup-step">' +
+        '<span class="setup-step-label">' + UI.escapeHtml(STEP_LABELS[step.key] || step.key) + '</span>' +
+        badgeFor(step.status) +
+        detail + '</li>';
+    }
+    el('setup-steps').innerHTML = stepsHtml || '<li class="setup-step">No steps reported.</li>';
+
+    var message = el('setup-message');
+    if (payload.message) {
+      message.innerHTML = UI.alert(payload.message, payload.initialized ? 'success' : 'info');
+      message.hidden = false;
+    } else {
+      message.hidden = true;
+      message.innerHTML = '';
+    }
+
+    var initBtn = el('setup-init');
+    if (initBtn) {
+      initBtn.hidden = state.busy || !!payload.initialized;
+    }
+  }
+
+  function initialize() {
+    if (state.busy) {
+      return;
+    }
+    state.busy = true;
+    var btn = el('setup-init');
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Please wait';
+    }
+    google.script.run
+      .withSuccessHandler(function (response) {
+        state.busy = false;
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = 'Initialize System';
+        }
+        var payload = (response && response.success) ? response.data : null;
+        if (payload) {
+          render(payload);
+        }
+        if (payload && payload.initialized) {
+          APP.toast('Salikha Studio OS is ready.', 'success');
+        }
+      })
+      .withFailureHandler(function (err) {
+        state.busy = false;
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = 'Initialize System';
+        }
+        var message = (err && err.message) || 'Initialization failed. Please try again.';
+        el('setup-status').innerHTML = UI.alert(message, 'error');
+        el('setup-status').hidden = false;
+        APP.toast(message, 'error');
+      })
+      .initializeSalikhaStudioOS();
+  }
+
+  function refresh() {
+    google.script.run
+      .withSuccessHandler(function (response) {
+        render((response && response.success) ? response.data : null);
+      })
+      .withFailureHandler(function (err) {
+        var message = (err && err.message) || 'Could not check setup status.';
+        el('setup-status').innerHTML = UI.alert(message, 'error');
+        el('setup-status').hidden = false;
+      })
+      .getSetupStatus();
+  }
+
+  function activate() {
+    if (!state.bound) {
+      state.bound = true;
+      var btn = el('setup-init');
+      if (btn) {
+        btn.addEventListener('click', initialize);
+      }
+    }
+    refresh();
+  }
+
+  window.SETUP = {
+    activate: activate,
+    refresh: refresh,
+    isInitialized: function () {
+      return state.initialized;
+    }
+  };
+})();
+</script>

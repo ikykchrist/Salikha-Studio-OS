@@ -1,0 +1,58 @@
+<!-- production-page.html
+     Production preparation page markup (Sprint 6, WF-4). Work on one
+     booking at a time: plan the checklist, mark tasks done, and gate
+     readiness. Production never posts cash or moves inventory. -->
+
+<section id="view-production" class="view" hidden aria-label="Production">
+  <div class="section-head">
+    <div>
+      <h2 class="section-title">Production</h2>
+      <p class="section-hint">Pre-event preparation. Complete the required tasks, then mark the booking ready to deploy.</p>
+    </div>
+  </div>
+
+  <div class="status" id="prod-status" hidden></div>
+
+  <div class="card mt-4" id="prod-register">
+    <div class="card-head">
+      <h3 class="card-title">Bookings in production</h3>
+      <span class="badge badge-neutral" id="prod-count">Loading&hellip;</span>
+    </div>
+
+    <div class="filter-row" id="prod-filters">
+      <input class="field-input" type="search" id="prod-filter-search" placeholder="Search booking, client&hellip;" aria-label="Search bookings">
+      <button class="btn btn-ghost" type="button" data-prod-action="refresh">Refresh</button>
+    </div>
+
+    <div class="table-wrap">
+      <table class="data-table" id="prod-table">
+        <thead>
+          <tr>
+            <th>Booking</th>
+            <th>Client</th>
+            <th>Event date</th>
+            <th>Tasks</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="prod-body"><!-- rendered --></tbody>
+      </table>
+    </div>
+
+    <div class="pagination-row" id="prod-pagination"><!-- rendered --></div>
+  </div>
+
+  <!-- Task workspace -->
+  <div id="prod-task-area" hidden>
+    <div class="card mt-4">
+      <div class="card-head">
+        <h3 class="card-title" id="prod-task-title">Task checklist</h3>
+        <span class="badge badge-info" id="prod-readiness">Not planned</span>
+      </div>
+      <p class="section-hint" id="prod-task-hint"></p>
+      <div class="detail-badges mt-2" id="prod-task-actions"></div>
+      <div id="prod-tasks-list" class="mt-3"></div>
+    </div>
+  </div>
+</section>

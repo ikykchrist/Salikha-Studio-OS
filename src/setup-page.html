@@ -1,0 +1,29 @@
+<!-- setup-page.html
+     First-run system setup view. Shown by the boot gate when the
+     environment (database, Drive root, automation, calendar) is not
+     configured or not initialized. Reuses the design-system components
+     (cards, badges, alerts) from components.html. -->
+
+<section id="view-setup" class="view" hidden aria-label="System setup">
+  <div class="section-head">
+    <div>
+      <h2 class="section-title">System Setup</h2>
+      <p class="section-hint">Connect and initialize Salikha Studio OS. Setup is safe to run again - it never deletes existing data.</p>
+    </div>
+    <div class="section-actions" id="setup-actions">
+      <button class="btn btn-primary" type="button" data-setup-action="initialize" id="setup-init" hidden>Initialize System</button>
+    </div>
+  </div>
+
+  <div class="setup-status" id="setup-status" hidden></div>
+
+  <article class="card">
+    <div class="card-head">
+      <h3 class="card-title">Configuration status</h3>
+      <span class="badge badge-neutral" id="setup-overall-badge">Checking&hellip;</span>
+    </div>
+    <div id="setup-user" class="setup-user"></div>
+    <ol id="setup-steps" class="setup-steps"><!-- rendered --></ol>
+    <div id="setup-message" class="setup-message"></div>
+  </article>
+</section>

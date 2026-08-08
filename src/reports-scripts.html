@@ -1,0 +1,414 @@
+<!-- reports-scripts.html
+     Reports view logic (Sprint 7): catalog rendering, report execution,
+     table rendering with money-aware columns, and CSV export. -->
+
+<script>
+(function () {
+  'use strict';
+
+  var GROUP_LABELS = {
+    finance: 'Finance',
+    sales: 'Sales',
+    inventory: 'Inventory',
+    operations: 'Operations'
+  };
+
+  var GROUP_ORDER = ['finance', 'sales', 'inventory', 'operations'];
+
+  var MONEY_TOKENS = ['amount', 'balance', 'value', 'total', 'cost', 'profit', 'revenue',
+    'paid', 'net', 'gross', 'tax', 'opening', 'closing', 'price', 'shortage',
+    'depreciation', 'book', 'commission'];
+
+  var PERCENT_TOKENS = ['pct', 'percent', 'margin', 'rate', 'share'];
+
+  var DESCRIPTIONS = {
+    'cashflow': 'Cash movement per account from the posted ledger.',
+    'income-statement': 'Revenue, direct costs, operating expenses, and net profit for the period.',
+    'receivables': 'Outstanding balances with aging buckets.',
+    'revenue-by-service': 'Revenue attributed to each service line.',
+    'revenue-by-package': 'Revenue grouped by package.',
+    'booking-profitability': 'Gross and net profit per booking from the booked cost snapshot.',
+    'expense-breakdown': 'Approved and paid operating expenses grouped by category.',
+    'inventory-valuation': 'On-hand quantities and weighted-average values.',
+    'inventory-movements': 'Movement ledger with running quantities.',
+    'low-stock': 'Items at or below their reorder level.',
+    'equipment-status': 'Equipment registry with book value and maintenance status.',
+    'partner-commissions': 'Commission register by settlement status.',
+    'crew-payments': 'Crew pay amounts, amounts paid, and balances.',
+    'daily-reconciliation': 'Per-account daily cash reconciliations.',
+    'cash-conversion-summary': 'Period cash in and out classified by transaction type.'
+  };
+
+  var catalog = [];
+  var current = null;
+
+  function el(id) {
+    return document.getElementById(id);
+  }
+
+  function fmtMoney(n) {
+    return '\u20B1' + Number(n || 0).toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+  }
+
+  function toTitle(key) {
+    return key
+      .replace(/_/g, ' ')
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .replace(/\b\w/g, function (ch) { return ch.toUpperCase(); });
+  }
+
+  function isPercentColumn(key) {
+    var k = key.toLowerCase();
+    return PERCENT_TOKENS.some(function (t) { return k.indexOf(t) !== -1; });
+  }
+
+  function isMoneyColumn(key) {
+    var k = key.toLowerCase();
+    if (isPercentColumn(k)) {
+      return false;
+    }
+    return MONEY_TOKENS.some(function (t) { return k.indexOf(t) !== -1; });
+  }
+
+  function reportKeys(rows) {
+    var keys = [];
+    for (var i = 0; i < rows.length; i++) {
+      for (var key in rows[i]) {
+        if (Object.prototype.hasOwnProperty.call(rows[i], key) && keys.indexOf(key) === -1) {
+          keys.push(key);
+        }
+      }
+    }
+    return keys.filter(function (k) {
+      return k !== 'report' && k.slice(-3) !== '_id' && k.slice(-3) !== '_at';
+    });
+  }
+
+  function renderTableHtml(rows) {
+    var keys = reportKeys(rows);
+    if (!keys.length) {
+      return '<div class="report-empty"><p class="empty-title">No rows</p>' +
+        '<p class="empty-hint">No records match the selected filters.</p></div>';
+    }
+    var html = '<div class="table-wrap report-table-wrap"><table class="data-table"><thead><tr>';
+    for (var k = 0; k < keys.length; k++) {
+      var money = isMoneyColumn(keys[k]);
+      var pct = isPercentColumn(keys[k]);
+      html += '<th' + (money || pct ? ' class="num"' : '') + '>' +
+        UI.escapeHtml(toTitle(keys[k])) + '</th>';
+    }
+    html += '</tr></thead><tbody>';
+    for (var r = 0; r < rows.length; r++) {
+      html += '<tr>';
+      for (var c = 0; c < keys.length; c++) {
+        var raw = rows[r][keys[c]];
+        var cell = '';
+        if (raw === null || raw === undefined || raw === '') {
+          cell = '&mdash;';
+        } else if (money) {
+          cell = fmtMoney(raw);
+        } else if (pct) {
+          cell = Number(raw).toFixed(2) + '%';
+        } else {
+          cell = UI.escapeHtml(String(raw));
+        }
+        html += '<td' + (money || pct ? ' class="num"' : '') + '>' + cell + '</td>';
+      }
+      html += '</tr>';
+    }
+    html += '</tbody></table></div>';
+    return html;
+  }
+
+  function renderSummary(summary) {
+    if (!summary || typeof summary !== 'object') {
+      return '';
+    }
+    var keys = Object.keys(summary).filter(function (k) {
+      return k !== 'report';
+    });
+    if (!keys.length) {
+      return '';
+    }
+    var html = '<div class="report-totals">';
+    for (var i = 0; i < keys.length; i++) {
+      var value = summary[keys[i]];
+      if (value === null || value === undefined || value === '') {
+        continue;
+      }
+      var text = typeof value === 'number'
+        ? (isMoneyColumn(keys[i]) ? fmtMoney(value) : String(value))
+        : String(value);
+      html += '<div class="report-total-item"><span class="report-total-label">' +
+        UI.escapeHtml(toTitle(keys[i])) + '</span><span class="report-total-value">' +
+        UI.escapeHtml(text) + '</span></div>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  function renderMeta(result) {
+    var filters = result.filters || {};
+    var parts = [];
+    if (filters.fromDate) {
+      parts.push('From ' + UI.escapeHtml(filters.fromDate));
+    }
+    if (filters.toDate) {
+      parts.push('to ' + UI.escapeHtml(filters.toDate));
+    }
+    var payload = result.payload || {};
+    if (payload.scope) {
+      parts.push(UI.escapeHtml(payload.scope));
+    }
+    return '<div class="report-meta-title">' + UI.escapeHtml(result.reportName) + '</div>' +
+      '<div class="report-meta-sub">' + (parts.length ? parts.join(' &middot; ') + ' &middot; ' : '') +
+      'Generated ' + UI.escapeHtml(String(result.generatedAt || '').replace('T', ' ')) + '</div>';
+  }
+
+  function showSkeleton() {
+    var region = el('report-table');
+    if (region) {
+      region.innerHTML = '<div class="skeleton-stack">' +
+        '<div class="skeleton-row"></div><div class="skeleton-row"></div>' +
+        '<div class="skeleton-row"></div></div>';
+    }
+  }
+
+  function showError(message) {
+    var region = el('report-error');
+    if (region) {
+      region.innerHTML = UI.alert(UI.escapeHtml(message), 'error');
+      region.hidden = false;
+    }
+  }
+
+  function renderReportApi() {
+    if (!current) {
+      return;
+    }
+    showSkeleton();
+    var errorRegion = el('report-error');
+    if (errorRegion) {
+      errorRegion.hidden = true;
+    }
+    google.script.run
+      .withSuccessHandler(function (response) {
+        if (!response || !response.success) {
+          showError(response && response.message ? response.message : 'Could not generate the report.');
+          return;
+        }
+        var result = response.data;
+        var payload = result.payload || {};
+        var rows = payload.rows || [];
+        var exportBtn = el('report-export');
+        if (exportBtn) {
+          exportBtn.disabled = !rows.length;
+        }
+        var meta = el('report-meta');
+        if (meta) {
+          meta.hidden = false;
+          meta.innerHTML = renderMeta(result) + renderSummary(payload.summary);
+        }
+        var table = el('report-table');
+        if (table) {
+          table.innerHTML = renderTableHtml(rows);
+        }
+        var empty = el('report-empty');
+        if (empty) {
+          empty.hidden = rows.length > 0;
+        }
+      })
+      .withFailureHandler(function () {
+        showError('Could not reach the server. Please try again.');
+      })
+      .getReportData({ reportId: current.id, filters: currentFilters() });
+  }
+
+  function currentFilters() {
+    var filters = {};
+    if (current && current.supportsDateRange) {
+      var from = el('report-from').value;
+      var to = el('report-to').value;
+      if (from) {
+        filters.fromDate = from;
+      }
+      if (to) {
+        filters.toDate = to;
+      }
+    }
+    return filters;
+  }
+
+  function openReport(id) {
+    var def = null;
+    for (var i = 0; i < catalog.length; i++) {
+      if (catalog[i].id === id) {
+        def = catalog[i];
+        break;
+      }
+    }
+    if (!def) {
+      return;
+    }
+    current = {
+      id: def.id,
+      name: def.name,
+      supportsDateRange: Boolean(def.supportsDateRange)
+    };
+    el('report-title').textContent = def.name;
+    el('report-description').textContent = DESCRIPTIONS[def.id] || 'Report generated from workbook data.';
+    el('report-filters').hidden = !current.supportsDateRange;
+    var exportBtn = el('report-export');
+    if (exportBtn) {
+      exportBtn.disabled = true;
+    }
+    var meta = el('report-meta');
+    if (meta) {
+      meta.hidden = true;
+      meta.innerHTML = '';
+    }
+    var empty = el('report-empty');
+    if (empty) {
+      empty.hidden = true;
+    }
+    var errorRegion = el('report-error');
+    if (errorRegion) {
+      errorRegion.hidden = true;
+    }
+    var pickerButtons = document.querySelectorAll('.report-item');
+    for (var p = 0; p < pickerButtons.length; p++) {
+      pickerButtons[p].classList.toggle('active', pickerButtons[p].getAttribute('data-report') === id);
+    }
+    renderReportApi();
+  }
+
+  function exportCsv() {
+    if (!current) {
+      return;
+    }
+    var exportBtn = el('report-export');
+    if (!exportBtn || exportBtn.disabled) {
+      return;
+    }
+    exportBtn.disabled = true;
+    var filters = currentFiltersSync();
+    google.script.run
+      .withSuccessHandler(function (response) {
+        exportBtn.disabled = false;
+        if (!response || !response.success) {
+          showToast(response && response.message ? response.message : 'Export failed.', 'error');
+          return;
+        }
+        var payload = response.data;
+        var blob = new Blob([payload.csv], { type: 'text/csv;charset=utf-8' });
+        var url = URL.createObjectURL(blob);
+        var anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = payload.filename || 'salikha-report.csv';
+        document.body.appendChild(anchor);
+        anchor.click();
+        setTimeout(function () {
+          URL.revokeObjectURL(url);
+          if (anchor.parentNode) {
+            anchor.parentNode.removeChild(anchor);
+          }
+        }, 1000);
+        showToast('CSV exported' + (payload.truncated ? ' (truncated at ' + payload.rowCount + ' rows)' : '') + '.');
+      })
+      .withFailureHandler(function () {
+        exportBtn.disabled = false;
+        showToast('Could not export the report. Please try again.', 'error');
+      })
+      .exportReportCsv({ reportId: current.id, filters: filters });
+  }
+
+  function showToast(message, tone) {
+    if (typeof window.APP === 'object' && window.APP.toast) {
+      window.APP.toast(message, tone);
+    }
+  }
+
+  function renderPicker() {
+    setDefaultDates();
+    var list = el('reports-list');
+    if (!list) {
+      return;
+    }
+    var groups = {};
+    for (var i = 0; i < catalog.length; i++) {
+      var g = catalog[i].group || 'finance';
+      (groups[g] = groups[g] || []).push(catalog[i]);
+    }
+    var html = '';
+    for (var o = 0; o < GROUP_ORDER.length; o++) {
+      var items = groups[GROUP_ORDER[o]] || [];
+      if (!items.length) {
+        continue;
+      }
+      html += '<div class="report-group-label">' + UI.escapeHtml(GROUP_LABELS[GROUP_ORDER[o]]) + '</div>';
+      for (var j = 0; j < items.length; j++) {
+        html += '<button type="button" class="report-item" data-report="' +
+          UI.escapeHtml(items[j].id) + '">' + UI.escapeHtml(items[j].name) + '</button>';
+      }
+    }
+    list.innerHTML = html;
+    var buttons = list.querySelectorAll('.report-item');
+    for (var b = 0; b < buttons.length; b++) {
+      buttons[b].addEventListener('click', function (e) {
+        openReport(e.currentTarget.getAttribute('data-report'));
+      });
+    }
+  }
+
+  function setDefaultDates() {
+    var now = new Date();
+    var from = el('report-from');
+    var to = el('report-to');
+    if (from) {
+      from.value = now.getFullYear() + '-' + ('0' + (now.getMonth() + 1)).slice(-2) + '-01';
+    }
+    if (to) {
+      to.value = now.getFullYear() + '-' + ('0' + (now.getMonth() + 1)).slice(-2) + '-' +
+        ('0' + now.getDate()).slice(-2);
+    }
+  }
+
+  function activate() {
+    var runBtn = el('report-run');
+    var exportBtn = el('report-export');
+    if (runBtn && !runBtn.dataset.wired) {
+      runBtn.dataset.wired = '1';
+      runBtn.addEventListener('click', renderReportApi);
+    }
+    if (exportBtn && !exportBtn.dataset.wired) {
+      exportBtn.dataset.wired = '1';
+      exportBtn.addEventListener('click', exportCsv);
+    }
+    if (catalog.length) {
+      return;
+    }
+    google.script.run
+      .withSuccessHandler(function (response) {
+        if (!response || !response.success) {
+          return;
+        }
+        catalog = response.data || [];
+        renderPicker();
+      })
+      .withFailureHandler(function () {
+        var list = el('reports-list');
+        if (list) {
+          list.innerHTML = '<div class="report-group-label">Could not load reports.</div>';
+        }
+      })
+      .getReportList();
+  }
+
+  window.REPORTS = {
+    activate: activate
+  };
+})();
+</script>

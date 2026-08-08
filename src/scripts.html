@@ -1,0 +1,681 @@
+<!-- scripts.html
+     Application bootstrap: page registry, navigation, hash routing,
+     sidebar/drawer behavior, health check, toasts, and safe DOM helpers.
+     One global namespace (window.APP) is used intentionally. -->
+
+<script>
+(function () {
+  'use strict';
+
+  var APP_NAME = 'Salikha Studio OS';
+
+  var GROUPS = [
+    { label: 'Overview', items: ['dashboard', 'calendar'] },
+    { label: 'Business', items: ['leads', 'clients', 'bookings'] },
+    { label: 'Operations', items: ['production', 'deployments', 'inventory', 'equipment'] },
+    { label: 'Finance', items: ['cashflow', 'payments', 'expenses', 'reports'] },
+    { label: 'Management', items: ['packages', 'purchasing', 'partners', 'crew', 'files'] },
+    { label: 'System', items: ['settings'] }
+  ];
+
+  var PAGES = {
+    dashboard: { title: 'Dashboard', description: 'Daily business overview.', icon: 'dashboard', features: [] },
+    setup: { title: 'System Setup', description: 'First-run configuration and initialization.', icon: 'settings', features: [] },
+    calendar: { title: 'Calendar', description: 'Timeline of events across all bookings.', icon: 'calendar', features: ['Event month view', 'Day-by-day event detail', 'Filters by status and venue', 'Google Calendar mirror'] },
+    leads: { title: 'Leads', description: 'Capture and manage prospective clients.', icon: 'leads', features: ['Lead pipeline stages', 'Source and budget tracking', 'Convert to client and booking', 'Lost and dormant handling'] },
+    clients: { title: 'Clients', description: 'Customer master data and history.', icon: 'clients', features: ['Client profiles and contacts', 'Booking and payment history', 'Duplicate merge', 'Soft deactivate'] },
+    bookings: { title: 'Bookings', description: 'Contracts, services, pricing, and receivables.', icon: 'bookings', features: ['Services line items', 'Payment plans', 'Confirmation and cancellation', 'Profitability per booking'] },
+    production: { title: 'Production', description: 'Pre-event preparation workflows.', icon: 'production', features: ['Per-booking production checklist', 'Crew and transport plan', 'Ready-to-deploy gate'] },
+    deployments: { title: 'Deployments', description: 'Event deployment forms, sign-off, and return reconciliation.', icon: 'deployments', features: ['Deployment checklist', 'Crew sign-off', 'Material usage capture', 'Return reconciliation'] },
+    inventory: { title: 'Inventory', description: 'Consumable stock, batches, and valuation.', icon: 'inventory', features: ['Stock items and categories', 'Batches and weighted-average cost', 'Movements ledger', 'Low-stock alerts'] },
+    equipment: { title: 'Equipment', description: 'Asset registry and assignment tracking.', icon: 'equipment', features: ['Equipment registry', 'Deployment assignment', 'Maintenance log', 'Condition tracking'] },
+    cashflow: { title: 'Cashflow', description: 'Cash accounts and cash transactions - the financial source of truth.', icon: 'cashflow', features: ['Cash account balances', 'Verified cash transactions', 'Transfers and owner funds', 'Daily cash reconciliation'] },
+    payments: { title: 'Payments', description: 'Payments received and applied to bookings.', icon: 'payments', features: ['Payment recording and verification', 'Apply to booking plans', 'Refunds', 'Payment history'] },
+    expenses: { title: 'Expenses', description: 'Expense capture, approval, and payment.', icon: 'expenses', features: ['Expense categories', 'Approval workflow', 'Direct-cost tagging', 'Receipt files'] },
+    reports: { title: 'Reports', description: 'Financial, inventory, and operational reporting.', icon: 'reports', features: ['Cashflow report', 'Income statement', 'Booking profitability', 'Inventory valuation'] },
+    packages: { title: 'Packages', description: 'Productized service bundles for sale.', icon: 'packages', features: ['Package catalog', 'Service line items', 'Base and recommended pricing'] },
+    purchasing: { title: 'Purchasing', description: 'Purchase orders and supplier receipts.', icon: 'purchasing', features: ['Purchase orders', 'Partial and full receipt', 'Stock batch creation', 'Equipment lines'] },
+    partners: { title: 'Partners', description: 'Referral, supplier, and sub-contractor registry.', icon: 'partners', features: ['Partner types', 'Commission rates', 'Commission settlement'] },
+    crew: { title: 'Crew', description: 'Crew members, assignments, and pay.', icon: 'crew', features: ['Crew profiles and rates', 'Event assignments', 'Sign-off and payments'] },
+    files: { title: 'Files', description: 'Document storage linked to business records.', icon: 'files', features: ['Entity-linked folders', 'Receipts and contracts', 'Role-scoped access'] },
+    settings: { title: 'Settings', description: 'Business configuration and user management.', icon: 'settings', features: ['Business profile', 'Users and roles', 'ID sequences', 'Backup status'] }
+  };
+
+  var state = {
+    currentPage: 'dashboard'
+  };
+
+  function el(id) {
+    return document.getElementById(id);
+  }
+
+  function hydrateIcons(root) {
+    var nodes = (root || document).querySelectorAll('[data-icon]');
+    for (var i = 0; i < nodes.length; i++) {
+      var node = nodes[i];
+      node.innerHTML = UI.icon(node.getAttribute('data-icon'));
+    }
+  }
+
+  function renderNav() {
+    var nav = el('sidebar-nav');
+    var html = '';
+    for (var g = 0; g < GROUPS.length; g++) {
+      var group = GROUPS[g];
+      html += '<div class="nav-group"><div class="nav-group-label">' + UI.escapeHtml(group.label) + '</div>';
+      for (var i = 0; i < group.items.length; i++) {
+        var id = group.items[i];
+        var page = PAGES[id];
+        html += '<a class="nav-item" href="#/' + id + '" data-page="' + id + '">' +
+          '<span class="nav-icon" data-icon="' + page.icon + '" aria-hidden="true"></span>' +
+          '<span class="nav-label">' + UI.escapeHtml(page.title) + '</span>' +
+          '</a>';
+      }
+      html += '</div>';
+    }
+    nav.innerHTML = html;
+    hydrateIcons(nav);
+  }
+
+  function currentRoute() {
+    var hash = window.location.hash || '';
+    var match = hash.match(/^#\/([a-z0-9-]+)/);
+    if (!match) {
+      return 'dashboard';
+    }
+    return PAGES[match[1]] ? match[1] : 'dashboard';
+  }
+
+  function renderPagePlaceholder(page) {
+    var featureHtml = '';
+    if (page.features && page.features.length) {
+      featureHtml = '<ul class="feature-list">';
+      for (var i = 0; i < page.features.length; i++) {
+        featureHtml += '<li>' + UI.escapeHtml(page.features[i]) + '</li>';
+      }
+      featureHtml += '</ul>';
+    }
+    return '<div class="page-placeholder">' +
+      '<div class="page-placeholder-head">' +
+      '<span class="page-icon" data-icon="' + page.icon + '" aria-hidden="true"></span>' +
+      '<div>' +
+      '<h2 class="section-title">' + UI.escapeHtml(page.title) + '</h2>' +
+      '<p class="section-hint">' + UI.escapeHtml(page.description) + '</p>' +
+      '</div>' +
+      '</div>' +
+      '<div class="placeholder-box">' +
+      UI.badge('Planned for a future sprint', 'info') +
+      '<p class="placeholder-text">This module is part of the approved roadmap and will be built in its assigned sprint.</p>' +
+      featureHtml +
+      '</div>' +
+      '</div>';
+  }
+
+  function setActiveNav(pageId) {
+    var links = document.querySelectorAll('.nav-item');
+    for (var i = 0; i < links.length; i++) {
+      links[i].classList.toggle('active', links[i].getAttribute('data-page') === pageId);
+    }
+  }
+
+  function showView(pageId) {
+    var dashboard = el('view-dashboard');
+    var page = el('view-page');
+    var setup = el('view-setup');
+    var cashflow = el('view-cashflow');
+    var settings = el('view-settings');
+    var clients = el('view-clients');
+    var leads = el('view-leads');
+    var packages = el('view-packages');
+    var bookings = el('view-bookings');
+    var calendar = el('view-calendar');
+    var payments = el('view-payments');
+    var expenses = el('view-expenses');
+    var production = el('view-production');
+    var deployments = el('view-deployments');
+    var reports = el('view-reports');
+    var purchasing = el('view-purchasing');
+    var isDashboard = pageId === 'dashboard';
+    var isSetup = pageId === 'setup';
+    var isCashflow = pageId === 'cashflow';
+    var isSettings = pageId === 'settings';
+    var isClients = pageId === 'clients';
+    var isLeads = pageId === 'leads';
+    var isPackages = pageId === 'packages';
+    var isBookings = pageId === 'bookings';
+    var isCalendar = pageId === 'calendar';
+    var isPayments = pageId === 'payments';
+    var isExpenses = pageId === 'expenses';
+    var isProduction = pageId === 'production';
+    var isDeployments = pageId === 'deployments';
+    var isReports = pageId === 'reports';
+    var isPurchasing = pageId === 'purchasing';
+    var isSpecial = isSetup || isCashflow || isSettings || isClients || isLeads || isPackages || isBookings || isCalendar || isPayments || isExpenses || isProduction || isDeployments || isReports || isPurchasing;
+
+    dashboard.hidden = isSpecial || !isDashboard;
+    page.hidden = isDashboard || isSpecial;
+    if (setup) {
+      setup.hidden = !isSetup;
+    }
+    if (cashflow) {
+      cashflow.hidden = !isCashflow;
+    }
+    if (settings) {
+      settings.hidden = !isSettings;
+    }
+    if (clients) {
+      clients.hidden = !isClients;
+    }
+    if (leads) {
+      leads.hidden = !isLeads;
+    }
+    if (packages) {
+      packages.hidden = !isPackages;
+    }
+    if (bookings) {
+      bookings.hidden = !isBookings;
+    }
+    if (calendar) {
+      calendar.hidden = !isCalendar;
+    }
+    if (payments) {
+      payments.hidden = !isPayments;
+    }
+    if (expenses) {
+      expenses.hidden = !isExpenses;
+    }
+    if (production) {
+      production.hidden = !isProduction;
+    }
+    if (deployments) {
+      deployments.hidden = !isDeployments;
+    }
+    if (reports) {
+      reports.hidden = !isReports;
+    }
+    if (purchasing) {
+      purchasing.hidden = !isPurchasing;
+    }
+
+    if (isSetup) {
+      if (typeof window.SETUP === 'object' && window.SETUP.activate) {
+        window.SETUP.activate();
+      }
+    } else if (isCashflow) {
+      if (typeof window.FINANCE === 'object' && window.FINANCE.activate) {
+        window.FINANCE.activate();
+      }
+    } else if (isSettings) {
+      if (typeof window.SETTINGS === 'object' && window.SETTINGS.activate) {
+        window.SETTINGS.activate();
+      }
+    } else if (isClients) {
+      if (typeof window.CUSTOMER === 'object' && window.CUSTOMER.activateClients) {
+        window.CUSTOMER.activateClients();
+      }
+    } else if (isLeads) {
+      if (typeof window.CUSTOMER === 'object' && window.CUSTOMER.activateLeads) {
+        window.CUSTOMER.activateLeads();
+      }
+    } else if (isPackages) {
+      if (typeof window.PACKAGES === 'object' && window.PACKAGES.activate) {
+        window.PACKAGES.activate();
+      }
+    } else if (isBookings) {
+      if (typeof window.BOOKINGS === 'object' && window.BOOKINGS.activate) {
+        window.BOOKINGS.activate();
+      }
+    } else if (isCalendar) {
+      if (typeof window.BOOKINGS === 'object' && window.BOOKINGS.activateCalendar) {
+        window.BOOKINGS.activateCalendar();
+      }
+    } else if (isPayments) {
+      if (typeof window.PAYMENTS === 'object' && window.PAYMENTS.activate) {
+        window.PAYMENTS.activate();
+      }
+    } else if (isExpenses) {
+      if (typeof window.EXPENSES === 'object' && window.EXPENSES.activate) {
+        window.EXPENSES.activate();
+      }
+    } else if (isProduction) {
+      if (typeof window.OPERATIONS === 'object' && window.OPERATIONS.activateProduction) {
+        window.OPERATIONS.activateProduction();
+      }
+    } else if (isDeployments) {
+      if (typeof window.OPERATIONS === 'object' && window.OPERATIONS.activateDeployments) {
+        window.OPERATIONS.activateDeployments();
+      }
+    } else if (isReports) {
+      if (typeof window.REPORTS === 'object' && window.REPORTS.activate) {
+        window.REPORTS.activate();
+      }
+    } else if (isPurchasing) {
+      if (typeof window.PURCHASING === 'object' && window.PURCHASING.activate) {
+        window.PURCHASING.activate();
+      }
+    } else if (!isDashboard) {
+      page.innerHTML = renderPagePlaceholder(PAGES[pageId]);
+      hydrateIcons(page);
+    }
+
+    if (isDashboard) {
+      if (typeof window.loadDashboard === 'function') {
+        window.loadDashboard();
+      } else {
+        loadHomePulse();
+      }
+    }
+
+    var title = PAGES[pageId].title;
+    el('page-title').textContent = title;
+    el('page-description').textContent = PAGES[pageId].description;
+    document.title = title + ' - ' + APP_NAME;
+
+    setActiveNav(pageId);
+    el('main-content').scrollTop = 0;
+    window.scrollTo(0, 0);
+  }
+
+  function navigate() {
+    var pageId = currentRoute();
+    state.currentPage = pageId;
+    showView(pageId);
+    ensureMobileActionBars();
+    closeDrawer();
+  }
+
+  /* On small screens the primary actions move out of the section header
+     to the bottom edge of the view so they stick while the page scrolls
+     (DESIGN_SYSTEM S23: primary actions in a sticky bottom bar on mobile).
+     Origin positions are remembered so crossing back to desktop restores
+     the bar into the header. */
+  var mobileActionBars = [];
+
+  function findMobileBarRecord(el) {
+    for (var i = 0; i < mobileActionBars.length; i++) {
+      if (mobileActionBars[i].el === el) {
+        return mobileActionBars[i];
+      }
+    }
+    return null;
+  }
+
+  function ensureMobileActionBars() {
+    var isMobile = window.matchMedia && window.matchMedia('(max-width: 640px)').matches;
+    var sections = document.querySelectorAll('section.view:not([hidden]) .section-actions');
+    for (var i = 0; i < sections.length; i++) {
+      var bar = sections[i];
+      var record = findMobileBarRecord(bar);
+      if (!record) {
+        record = { el: bar, parent: bar.parentNode, next: bar.nextSibling };
+        mobileActionBars.push(record);
+      }
+      if (isMobile) {
+        var section = bar.closest('section.view');
+        if (section && bar.parentNode !== section) {
+          section.appendChild(bar);
+        }
+      }
+    }
+    if (!isMobile) {
+      for (var j = 0; j < mobileActionBars.length; j++) {
+        var item = mobileActionBars[j];
+        if (item.parent) {
+          item.parent.insertBefore(item.el, item.next);
+        }
+      }
+    }
+  }
+
+  /* Home dashboard pulse (Sprint 2/3) */
+
+  var pulseLoaded = false;
+
+  function moneyText(value) {
+    return '\u20B1' + Number(value || 0).toFixed(2);
+  }
+
+  function loadHomePulse() {
+    if (pulseLoaded) {
+      return;
+    }
+    if (typeof google === 'undefined' || !google.script || !google.script.run) {
+      return;
+    }
+    pulseLoaded = true;
+    google.script.run
+      .withSuccessHandler(function (response) {
+        if (!response || !response.success) {
+          return;
+        }
+        var data = response.data;
+        if (!data || data.uninitialized) {
+          return;
+        }
+        var map = {
+          'home-active-clients': data.activeClients,
+          'home-open-leads': data.openLeads,
+          'home-followups-due': data.followUpsDue,
+          'home-active-packages': data.activePackages,
+          'home-upcoming-events': data.upcomingEvents,
+          'home-confirmed-bookings': data.confirmedBookings,
+          'home-outstanding-receivables': data.outstandingReceivables !== undefined ? moneyText(data.outstandingReceivables) : '-',
+          'home-payments-month': data.paymentsThisMonth !== undefined ? moneyText(data.paymentsThisMonth) : '-',
+          'home-attention-items': data.attention ? (data.attention.unpaidConfirmed + data.attention.overpayments + data.attention.refundReviews) : 0
+        };
+        for (var id in map) {
+          if (Object.prototype.hasOwnProperty.call(map, id)) {
+            var node = el(id);
+            if (node) {
+              node.textContent = String(map[id]);
+            }
+          }
+        }
+      })
+      .withFailureHandler(function () {
+        /* dashboard pulse is best-effort; never blocks the shell */
+      })
+      .getHomeDashboardSummary();
+  }
+
+  /* Drawer behavior */
+
+  function openDrawer() {
+    var sidebar = el('sidebar');
+    var scrim = el('scrim');
+    var menuBtn = el('menu-btn');
+    sidebar.classList.add('open');
+    scrim.hidden = false;
+    menuBtn.setAttribute('aria-expanded', 'true');
+    menuBtn.setAttribute('aria-label', 'Close menu');
+  }
+
+  function closeDrawer() {
+    var sidebar = el('sidebar');
+    var scrim = el('scrim');
+    var menuBtn = el('menu-btn');
+    sidebar.classList.remove('open');
+    scrim.hidden = true;
+    menuBtn.setAttribute('aria-expanded', 'false');
+    menuBtn.setAttribute('aria-label', 'Open menu');
+  }
+
+  /* Toasts */
+
+  function toast(message, tone) {
+    var region = el('toast-region');
+    var node = document.createElement('div');
+    node.innerHTML = UI.toast(message, tone);
+    region.appendChild(node);
+    setTimeout(function () {
+      if (node.parentNode) {
+        node.parentNode.removeChild(node);
+      }
+    }, 4000);
+  }
+
+  /* Health check */
+
+  var CONN_STATES = {
+    checking: { dot: 'conn-dot-checking', text: 'Checking connection&hellip;' },
+    connected: { dot: 'conn-dot-ok', text: 'Connected' },
+    offline: { dot: 'conn-dot-bad', text: 'Server unreachable' }
+  };
+
+  function setConnection(stateName) {
+    var status = el('conn-status');
+    var dot = status.querySelector('.conn-dot');
+    var text = status.querySelector('.conn-text');
+    var meta = CONN_STATES[stateName];
+    dot.className = 'conn-dot ' + meta.dot;
+    text.innerHTML = meta.text;
+  }
+
+  function showConnectionError(message) {
+    var banner = el('conn-banner');
+    banner.innerHTML = UI.alert(message, 'error');
+    banner.hidden = false;
+    toast(message, 'error');
+  }
+
+  function checkHealth() {
+    setConnection('checking');
+    if (typeof google === 'undefined' || !google.script || !google.script.run) {
+      showConnectionError('Server connection failed. Please reload the page or contact the owner.');
+      return;
+    }
+    google.script.run
+      .withSuccessHandler(onHealthSuccess)
+      .withFailureHandler(onHealthFailure)
+      .getSystemHealth();
+  }
+
+  function onHealthSuccess(response) {
+    var payload = response && response.success ? response.data : null;
+    if (!payload) {
+      onHealthFailure(new Error('Unexpected response'));
+      return;
+    }
+    var version = el('app-version');
+    version.textContent = 'v' + payload.appVersion;
+    setConnection('connected');
+    var integrations = payload.integrations || {};
+    if (integrations.overall && integrations.overall !== 'CONNECTED') {
+      var banner = el('conn-banner');
+      banner.innerHTML = UI.alert(
+        'Google integrations are ' + integrations.overall.toLowerCase().replace(/_/g, ' ') +
+        '. Open Settings and run Check Connections for details.',
+        integrations.overall === 'CONNECTION_ERROR' ? 'error' : 'info'
+      );
+      banner.hidden = false;
+    }
+  }
+
+  function onHealthFailure(err) {
+    setConnection('offline');
+    showConnectionError('Could not reach the server. Please reload the page or contact the owner.');
+  }
+
+  /* Keyboard and pointer behavior */
+
+  function onKeyDown(event) {
+    if (event.key === 'Escape') {
+      closeDrawer();
+      closeModal();
+    }
+  }
+
+  /* Modal foundation */
+
+  function openModal(html) {
+    var region = el('modal-region');
+    region.innerHTML = html;
+    hydrateIcons(region);
+    var overlay = el('modal-overlay');
+    if (overlay) {
+      var closeButtons = overlay.querySelectorAll('[data-modal-close]');
+      for (var i = 0; i < closeButtons.length; i++) {
+        closeButtons[i].addEventListener('click', closeModal);
+      }
+    }
+  }
+
+  function closeModal() {
+    var region = el('modal-region');
+    region.innerHTML = '';
+  }
+
+  /* Bootstrap */
+
+  function applyInitialRoute() {
+    var body = document.body;
+    if (!body || !body.dataset || !body.dataset.initialRoute) {
+      return false;
+    }
+    var route = body.dataset.initialRoute;
+    if (PAGES[route] && !window.location.hash) {
+      window.location.hash = '#/' + route;
+      return true;
+    }
+    return false;
+  }
+
+  /* Module pages are included in the document AFTER the .app shell (which
+     is min-height: 100vh), so they would render below the fold. Relocate
+     every view workspace into #main-content so pages visibly start below
+     the topbar instead of at the bottom of the viewport. */
+
+  /* Toast fallback helper (shared across modules). Translates a backend
+     failure envelope or a native Google JS Error into a safe user-facing
+     message and logs a code-keyed diagnostic to the console for development
+     mode. Never exposes stack traces or secrets to the UI. */
+
+  function toastMessageFromResponse(response, pageLabel, isTransport) {
+    var code = null;
+    var message = null;
+    if (response && typeof response === 'object') {
+      if (typeof response.message === 'string' && response.message) {
+        message = response.message;
+      }
+      if (response.error && typeof response.error === 'object' && typeof response.error.code === 'string') {
+        code = response.error.code;
+      } else if (typeof response.code === 'string') {
+        code = response.code;
+      }
+    } else if (isTransport && response && typeof response.message === 'string') {
+      message = response.message;
+    }
+    if (message) {
+      if (typeof console !== 'undefined' && console && typeof console.warn === 'function') {
+        console.warn('[' + (pageLabel || 'app') + '] ' +
+          (isTransport ? 'transport failed' : 'server call failed') +
+          (code ? ': ' + code + ' - ' : ' - ') + message);
+      }
+      return message;
+    }
+    var fallback;
+    switch (code) {
+      case 'PERMISSION_DENIED':
+      case 'SETUP_PERMISSION_DENIED':
+      case 'FILE_PERMISSION_DENIED':
+      case 'AUTOMATION_PERMISSION_DENIED':
+        fallback = 'You do not have permission to access this module.';
+        break;
+      case 'DATABASE_NOT_INITIALIZED':
+        fallback = 'This module is not initialized yet.';
+        break;
+      case 'DATABASE_NOT_CONFIGURED':
+        fallback = 'Database configuration is missing. Open Settings to configure the data source.';
+        break;
+      case 'DRIVE_NOT_CONFIGURED':
+        fallback = 'Google Drive is not configured yet. Open Settings to complete the connection.';
+        break;
+      case 'CALENDAR_NOT_CONFIGURED':
+        fallback = 'Google Calendar is not configured yet. Open Settings to complete the connection.';
+        break;
+      case 'CONFIGURATION_ERROR':
+        fallback = 'A required configuration is missing. Open Settings to review the connection status.';
+        break;
+      case 'AUTHORIZATION_REQUIRED':
+      case 'USER_NOT_REGISTERED':
+        fallback = 'Your account is not registered for this app. Ask the owner to add you.';
+        break;
+      default:
+        fallback = isTransport
+          ? 'The server is unreachable. Please reload the page.'
+          : 'The server could not complete the operation.';
+    }
+    if (typeof console !== 'undefined' && console && typeof console.warn === 'function') {
+      console.warn('[' + (pageLabel || 'app') + '] ' +
+        (isTransport ? 'transport failed' : 'server call failed') +
+        (code ? ': ' + code : '') +
+        ' - ' + fallback);
+    }
+    return fallback;
+  }
+
+  function relocateModuleViews() {
+    var main = el('main-content');
+    if (!main) {
+      return;
+    }
+    var nodes = document.querySelectorAll('.view, .detail-workspace');
+    for (var i = 0; i < nodes.length; i++) {
+      var node = nodes[i];
+      if (node.parentNode && node.parentNode !== main) {
+        main.appendChild(node);
+      }
+    }
+  }
+
+  /* Boot gate: when the system is not configured/initialized, route to
+     the setup view so the owner can initialize it. Read-only; never
+     blocks the shell if the call fails. */
+
+  function checkSetupGate() {
+    if (typeof window.SETUP !== 'object' || !window.SETUP.refresh ||
+        typeof google === 'undefined' || !google.script || !google.script.run) {
+      return;
+    }
+    google.script.run
+      .withSuccessHandler(function (response) {
+        var payload = (response && response.success) ? response.data : null;
+        if (!payload) {
+          return;
+        }
+        if (payload.initialized) {
+          if (currentRoute() === 'setup') {
+            window.location.hash = '#/dashboard';
+          }
+          return;
+        }
+        window.location.hash = '#/setup';
+      })
+      .withFailureHandler(function () {
+        /* setup status is best-effort; the app still loads */
+      })
+      .getSetupStatus();
+  }
+
+  function init() {
+    renderNav();
+    hydrateIcons(document);
+    relocateModuleViews();
+
+    el('menu-btn').addEventListener('click', function () {
+      if (el('sidebar').classList.contains('open')) {
+        closeDrawer();
+      } else {
+        openDrawer();
+      }
+    });
+
+    el('scrim').addEventListener('click', closeDrawer);
+    document.addEventListener('keydown', onKeyDown);
+    window.addEventListener('hashchange', navigate);
+    window.addEventListener('resize', ensureMobileActionBars);
+
+    if (!applyInitialRoute()) {
+      navigate();
+    }
+    checkHealth();
+    checkSetupGate();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+
+  window.APP = {
+    PAGES: PAGES,
+    GROUPS: GROUPS,
+    state: state,
+    toast: toast,
+    openModal: openModal,
+    closeModal: closeModal,
+    navigate: navigate
+  };
+})();
+</script>

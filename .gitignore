@@ -1,0 +1,31 @@
+# clasp secrets and local config - NEVER commit
+.clasp.json
+
+# Node
+node_modules/
+npm-debug.log*
+package-lock.json
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Editor directories
+.vscode/
+.idea/
+
+# Compiled / build output
+dist/
+build/
+
+# Backup files
+*.bak
+*.tmp

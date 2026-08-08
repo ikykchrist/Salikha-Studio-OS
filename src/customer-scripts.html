@@ -1,0 +1,884 @@
+<!-- customer-scripts.html
+     Clients and Leads page controller (Sprint 2): lists, filters,
+     pagination, forms, profiles, notes/interactions, and conversion. -->
+
+<script>
+(function () {
+  'use strict';
+
+  var state = {
+    clientsPage: 1,
+    leadsPage: 1,
+    packagesPage: 1,
+    activeMenu: null
+  };
+
+  function el(id) {
+    return document.getElementById(id);
+  }
+
+  function esc(v) {
+    return CUST_UI.esc(v);
+  }
+
+  function callServer(fnName, args, onOk) {
+    var run = google.script.run
+      .withSuccessHandler(function (response) {
+        if (response && response.success) {
+          if (onOk) {
+            onOk(response.data);
+          }
+        } else {
+          handleFailure(response);
+        }
+      })
+      .withFailureHandler(handleFailure);
+    if (args !== undefined) {
+      run[fnName](args);
+    } else {
+      run[fnName]();
+    }
+  }
+
+  function handleFailure(response) {
+    APP.toast(toastMessageFromResponse(response, 'customer'), 'error');
+  }
+
+  function formError(id, message) {
+    var node = el(id);
+    if (node) {
+      node.textContent = message;
+      node.hidden = false;
+    }
+  }
+
+  /* ================= Clients ================= */
+
+  function clientFilters() {
+    return {
+      search: el('clients-search').value.trim(),
+      status: el('clients-status-filter').value,
+      clientType: el('clients-type-filter').value,
+      sourceChannel: el('clients-source-filter').value,
+      page: state.clientsPage
+    };
+  }
+
+  function loadClients() {
+    callServer('getClients', clientFilters(), function (data) {
+      renderClientTable(data);
+      loadClientSummary();
+    });
+  }
+
+  function renderClientTable(data) {
+    var tbody = el('clients-table-body');
+    if (!data.items.length) {
+      tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">' +
+        '<p class="empty-title">No clients yet</p>' +
+        '<p class="empty-hint">Add a client to start the customer master list.</p></div></td></tr>';
+      el('clients-pagination').innerHTML = '';
+      return;
+    }
+    var html = '';
+    for (var i = 0; i < data.items.length; i++) {
+      html += CUST_UI.clientRow(data.items[i]);
+    }
+    tbody.innerHTML = html;
+    renderPagination('clients-pagination', data, function (page) {
+      state.clientsPage = page;
+      loadClients();
+    });
+  }
+
+  function loadClientSummary() {
+    callServer('getHomeDashboardSummary', undefined, function (data) {
+      if (data && data.uninitialized) {
+        return;
+      }
+      el('kpi-active-clients').textContent = String(data.activeClients);
+      el('kpi-new-clients').textContent = String(data.clientsThisMonth);
+      el('kpi-followup-clients').textContent = String(data.followUpsDue);
+    });
+    callServer('getClientSummary', null, function () {});
+  }
+
+  function openClientForm(client) {
+    var body = CUST_UI.clientFormTpl(client);
+    var title = client ? 'Edit client' : 'Add client';
+    openModal(title, body, client ? 'Save changes' : 'Create client', function (confirmBtn) {
+      submitClientForm(client, confirmBtn);
+    });
+  }
+
+  function submitClientForm(client, confirmBtn) {
+    var payload = readClientForm();
+    var validation = validateClientForm(payload);
+    if (validation) {
+      formError('cf-error', validation);
+      return;
+    }
+    confirmBtn.disabled = true;
+    payload.clientId = client ? client.clientId : undefined;
+    var serverFn = client ? 'updateClient' : 'createClient';
+    callServer(serverFn, payload, function () {
+      APP.toast(client ? 'Client updated.' : 'Client created.', 'success');
+      APP.closeModal();
+      loadClients();
+    });
+  }
+
+  function readClientForm() {
+    return {
+      clientType: el('cf-type').value,
+      fullName: el('cf-fullname').value.trim(),
+      firstName: el('cf-first').value.trim(),
+      lastName: el('cf-last').value.trim(),
+      businessOrOrganization: el('cf-business').value.trim(),
+      contactNumber: el('cf-phone').value.trim(),
+      alternateContactNumber: el('cf-phone2').value.trim(),
+      email: el('cf-email').value.trim(),
+      facebookProfileUrl: el('cf-fb').value.trim(),
+      instagramProfileUrl: el('cf-ig').value.trim(),
+      addressLine: el('cf-address').value.trim(),
+      cityMunicipality: el('cf-city').value.trim(),
+      province: el('cf-province').value.trim(),
+      preferredContactChannel: el('cf-channel').value,
+      sourceChannel: el('cf-source').value,
+      notes: el('cf-notes').value.trim()
+    };
+  }
+
+  function validateClientForm(payload) {
+    if (!payload.fullName && !payload.businessOrOrganization) {
+      return 'Full name or business/organization name is required.';
+    }
+    if (payload.email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(payload.email)) {
+      return 'Email is not valid.';
+    }
+    if (payload.facebookProfileUrl && !/^(https?:\/\/)?([\w-]+\.)+[a-z]{2,}([/?#].*)?$/i.test(payload.facebookProfileUrl)) {
+      return 'Facebook profile URL is not valid.';
+    }
+    if (payload.instagramProfileUrl && !/^(https?:\/\/)?([\w-]+\.)+[a-z]{2,}([/?#].*)?$/i.test(payload.instagramProfileUrl)) {
+      return 'Instagram profile URL is not valid.';
+    }
+    return null;
+  }
+
+  function openClientProfile(clientId) {
+    callServer('getClient', clientId, function (client) {
+      callServer('getClientNotes', clientId, function (notes) {
+        callServer('getClientInteractions', clientId, function (interactions) {
+          renderClientProfile(client, notes, interactions);
+        });
+      });
+    });
+  }
+
+  function renderClientProfile(client, notes, interactions) {
+    var name = client.fullName || client.businessOrOrganization || 'Unnamed';
+    var html = '<div class="profile-head">' +
+      '<div class="profile-title">' + esc(name) + '</div>' +
+      '<div>' + CUST_UI.statusBadge(client.clientStatus) + '</div></div>' +
+      '<div class="profile-grid">' +
+      profileItem('Client ID', client.clientId) +
+      profileItem('Contact', client.contactNumber || '-') +
+      profileItem('Email', client.email || '-') +
+      profileItem('Facebook', client.facebookProfileUrl || '-') +
+      profileItem('Instagram', client.instagramProfileUrl || '-') +
+      profileItem('Source', CUST_UI.titleCase(client.sourceChannel || 'OTHER')) +
+      profileItem('Preferred channel', CUST_UI.titleCase(client.preferredContactChannel || 'OTHER')) +
+      profileItem('Last contacted', client.lastContactedAt || '-') +
+      profileItem('Address', [client.addressLine, client.cityMunicipality, client.province].filter(Boolean).join(', ') || '-') +
+      '</div>' +
+      '<div class="profile-section"><h4>Notes (' + notes.length + ')</h4><div id="profile-notes">' +
+      (notes.length ? notes.map(CUST_UI.noteItem).join('') : '<p class="note-meta">No notes yet.</p>') + '</div>' +
+      '<button class="btn btn-secondary btn-sm mt-2" type="button" data-profile-addnote="' + esc(client.clientId) + '">Add note</button></div>' +
+      '<div class="profile-section"><h4>Interactions (' + interactions.length + ')</h4><div id="profile-interactions">' +
+      (interactions.length ? interactions.map(CUST_UI.interactionItem).join('') : '<p class="note-meta">No interactions logged.</p>') + '</div>' +
+      '<button class="btn btn-secondary btn-sm mt-2" type="button" data-profile-addinteraction="' + esc(client.clientId) + '">Log interaction</button></div>' +
+      '<div class="profile-section"><h4>Future</h4>' +
+      '<p class="note-meta">Bookings and financial summaries arrive in Sprint 3.</p></div>';
+    openModal('Client profile', html, 'Close', function (btn) {
+      APP.closeModal();
+    });
+    var confirmBtn = el('finance-modal-confirm');
+    if (confirmBtn) {
+      confirmBtn.className = 'btn btn-secondary';
+      confirmBtn.textContent = 'Close';
+    }
+    var footer = document.querySelector('#modal-region .modal-foot');
+    if (footer && client.clientStatus !== 'ARCHIVED') {
+      var editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.className = 'btn btn-secondary';
+      editBtn.textContent = 'Edit';
+      editBtn.addEventListener('click', function () {
+        APP.closeModal();
+        openClientForm(client);
+      });
+      footer.insertBefore(editBtn, confirmBtn);
+    }
+  }
+
+  function profileItem(label, value) {
+    return '<div class="profile-item"><span class="profile-label">' + esc(label) + '</span><span class="profile-value">' + esc(value) + '</span></div>';
+  }
+
+  function openNoteForm(clientId) {
+    var body = '<form id="note-form" class="finance-form" novalidate>' +
+      '<div class="form-row">' +
+      '<div class="field"><label class="field-label">Note type</label><select class="field-select" id="nf-type">' + CUST_UI.options(CUST_UI.NOTE_TYPES, 'GENERAL') + '</select></div>' +
+      '<div class="field"><label class="field-label">Pinned</label><input class="field-input" type="checkbox" id="nf-pinned" style="width:auto;height:auto"></div>' +
+      '</div>' +
+      '<div class="field"><label class="field-label">Note text</label><textarea class="field-textarea" id="nf-text" maxlength="2000" required></textarea></div>' +
+      '<div class="field-error" id="nf-error" hidden></div></form>';
+    openModal('Add note', body, 'Save note', function (confirmBtn) {
+      var text = el('nf-text').value.trim();
+      if (!text) {
+        formError('nf-error', 'Note text is required.');
+        return;
+      }
+      confirmBtn.disabled = true;
+      callServer('createClientNote', {
+        clientId: clientId,
+        noteType: el('nf-type').value,
+        noteText: text,
+        isPinned: el('nf-pinned').checked
+      }, function () {
+        APP.toast('Note added.', 'success');
+        APP.closeModal();
+        openClientProfile(clientId);
+      });
+    });
+  }
+
+  function openInteractionForm(clientId, leadId) {
+    var today = new Date().toISOString().slice(0, 10);
+    var body = '<form id="interaction-form" class="finance-form" novalidate>' +
+      '<div class="form-row">' +
+      '<div class="field"><label class="field-label">Type</label><select class="field-select" id="if-type">' + CUST_UI.options(CUST_UI.INTERACTION_TYPES, 'INQUIRY') + '</select></div>' +
+      '<div class="field"><label class="field-label">Channel</label><select class="field-select" id="if-channel">' + CUST_UI.options(CUST_UI.INTERACTION_CHANNELS, 'PHONE') + '</select></div>' +
+      '</div>' +
+      '<div class="field"><label class="field-label">Date</label><input class="field-input" type="date" id="if-date" value="' + esc(today) + '"></div>' +
+      '<div class="field"><label class="field-label">Subject (optional)</label><input class="field-input" type="text" id="if-subject" maxlength="150"></div>' +
+      '<div class="field"><label class="field-label">Summary</label><textarea class="field-textarea" id="if-summary" maxlength="1000" required></textarea></div>' +
+      '<div class="field"><label class="field-label">Outcome (optional)</label><input class="field-input" type="text" id="if-outcome" maxlength="300"></div>' +
+      '<div class="field"><label class="field-label">Next follow-up date (optional)</label><input class="field-input" type="date" id="if-followup"></div>' +
+      '<div class="field-error" id="if-error" hidden></div></form>';
+    openModal('Log interaction', body, 'Save interaction', function (confirmBtn) {
+      var summary = el('if-summary').value.trim();
+      if (!summary) {
+        formError('if-error', 'Interaction summary is required.');
+        return;
+      }
+      confirmBtn.disabled = true;
+      callServer('createClientInteraction', {
+        clientId: clientId || null,
+        leadId: leadId || null,
+        interactionDate: el('if-date').value,
+        interactionType: el('if-type').value,
+        channel: el('if-channel').value,
+        subject: el('if-subject').value.trim(),
+        summary: summary,
+        outcome: el('if-outcome').value.trim(),
+        nextFollowUpDate: el('if-followup').value
+      }, function () {
+        APP.toast('Interaction logged.', 'success');
+        APP.closeModal();
+        if (clientId) {
+          openClientProfile(clientId);
+        } else if (leadId) {
+          openLeadDetail(leadId);
+        }
+      });
+    });
+  }
+
+  /* ================= Leads ================= */
+
+  function leadFilters() {
+    return {
+      search: el('leads-search').value.trim(),
+      status: el('leads-status-filter').value,
+      priority: el('leads-priority-filter').value,
+      sourceChannel: el('leads-source-filter').value,
+      page: state.leadsPage
+    };
+  }
+
+  function loadLeads() {
+    callServer('getLeads', leadFilters(), function (data) {
+      renderLeadTable(data);
+      loadLeadSummary();
+    });
+  }
+
+  function renderLeadTable(data) {
+    var tbody = el('leads-table-body');
+    if (!data.items.length) {
+      tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state">' +
+        '<p class="empty-title">No leads yet</p>' +
+        '<p class="empty-hint">Add a lead to start tracking inquiries.</p></div></td></tr>';
+      el('leads-pagination').innerHTML = '';
+      return;
+    }
+    var html = '';
+    for (var i = 0; i < data.items.length; i++) {
+      html += CUST_UI.leadRow(data.items[i]);
+    }
+    tbody.innerHTML = html;
+    renderPagination('leads-pagination', data, function (page) {
+      state.leadsPage = page;
+      loadLeads();
+    });
+  }
+
+  function loadLeadSummary() {
+    callServer('getLeadSummary', undefined, function (data) {
+      el('kpi-new-leads').textContent = String(data.newLeads);
+      el('kpi-followup-leads').textContent = String(data.needsFollowUp);
+      el('kpi-negotiating-leads').textContent = String(data.negotiating);
+      el('kpi-won-leads').textContent = String(data.wonThisMonth);
+      el('kpi-lost-leads').textContent = String(data.lostThisMonth);
+    });
+  }
+
+  function openLeadForm(lead) {
+    var body = CUST_UI.leadFormTpl(lead);
+    var title = lead ? 'Edit lead' : 'Add lead';
+    openModal(title, body, lead ? 'Save changes' : 'Create lead', function (confirmBtn) {
+      submitLeadForm(lead, confirmBtn);
+    });
+  }
+
+  function submitLeadForm(lead, confirmBtn) {
+    var payload = {
+      leadId: lead ? lead.leadId : undefined,
+      leadName: el('lf-name').value.trim(),
+      businessOrOrganization: el('lf-business').value.trim(),
+      contactNumber: el('lf-phone').value.trim(),
+      email: el('lf-email').value.trim(),
+      facebookProfileUrl: el('lf-fb').value.trim(),
+      instagramProfileUrl: el('lf-ig').value.trim(),
+      priority: el('lf-priority').value,
+      serviceInterest: el('lf-service').value.trim(),
+      eventType: el('lf-eventtype').value,
+      eventDateInterest: el('lf-eventdate').value,
+      venueOrLocation: el('lf-venue').value.trim(),
+      estimatedBudget: el('lf-budget').value,
+      sourceChannel: el('lf-source').value,
+      referredBy: el('lf-referred').value.trim(),
+      nextFollowUpDate: el('lf-followup').value,
+      notes: el('lf-notes').value.trim()
+    };
+    if (!payload.leadName && !payload.businessOrOrganization) {
+      formError('lf-error', 'Lead name or business/organization is required.');
+      return;
+    }
+    confirmBtn.disabled = true;
+    var serverFn = lead ? 'updateLead' : 'createLead';
+    callServer(serverFn, payload, function () {
+      APP.toast(lead ? 'Lead updated.' : 'Lead created.', 'success');
+      APP.closeModal();
+      loadLeads();
+    });
+  }
+
+  function openLeadDetail(leadId) {
+    callServer('getLead', leadId, function (lead) {
+      callServer('getLeadInteractions', leadId, function (interactions) {
+        renderLeadDetail(lead, interactions);
+      });
+    });
+  }
+
+  function renderLeadDetail(lead, interactions) {
+    var name = lead.leadName || lead.businessOrOrganization || 'Unnamed';
+    var converted = lead.leadStatus === 'WON';
+    var html = '<div class="profile-head">' +
+      '<div class="profile-title">' + esc(name) + '</div>' +
+      '<div>' + CUST_UI.statusBadge(lead.leadStatus) + ' ' + CUST_UI.statusBadge(lead.priority, 'priority') + '</div></div>' +
+      '<div class="profile-grid">' +
+      profileItem('Lead ID', lead.leadId) +
+      profileItem('Contact', lead.contactNumber || '-') +
+      profileItem('Email', lead.email || '-') +
+      profileItem('Service interest', lead.serviceInterest || '-') +
+      profileItem('Event type', CUST_UI.titleCase(lead.eventType || '-')) +
+      profileItem('Event date', lead.eventDateInterest || '-') +
+      profileItem('Venue', lead.venueOrLocation || '-') +
+      profileItem('Budget', lead.estimatedBudget ? CUST_UI.money(lead.estimatedBudget) : '-') +
+      profileItem('Source', CUST_UI.titleCase(lead.sourceChannel || 'OTHER')) +
+      profileItem('Next follow-up', lead.nextFollowUpDate || '-') +
+      profileItem('Converted to client', converted ? lead.convertedClientId : 'Not converted') +
+      (lead.lostReason ? profileItem('Lost reason', lead.lostReason) : '') +
+      '</div>' +
+      '<div class="profile-section"><h4>Interactions (' + interactions.length + ')</h4>' +
+      (interactions.length ? interactions.map(CUST_UI.interactionItem).join('') : '<p class="note-meta">No interactions logged.</p>') +
+      '</div>';
+    openModal('Lead details', html, 'Close', function (btn) {
+      APP.closeModal();
+    });
+    var confirmBtn = el('finance-modal-confirm');
+    if (confirmBtn) {
+      confirmBtn.className = 'btn btn-secondary';
+      confirmBtn.textContent = 'Close';
+    }
+    var footer = document.querySelector('#modal-region .modal-foot');
+    if (!footer) {
+      return;
+    }
+    var canAct = lead.leadStatus !== 'WON' && lead.leadStatus !== 'LOST' && lead.leadStatus !== 'ARCHIVED';
+    if (canAct) {
+      addFooterButton(footer, 'Convert to client', 'btn btn-primary', function () { openConversionModal(lead); });
+      addFooterButton(footer, 'Change status', 'btn btn-secondary', function () { openStatusModal(lead); });
+    }
+    if (lead.leadStatus === 'LOST' || lead.leadStatus === 'ARCHIVED') {
+      addFooterButton(footer, 'Reopen lead', 'btn btn-secondary', function () { openReopenModal(lead); });
+    }
+    addFooterButton(footer, 'Log interaction', 'btn btn-secondary', function () {
+      APP.closeModal();
+      openInteractionForm(null, lead.leadId);
+    });
+  }
+
+  function addFooterButton(footer, label, className, onClick) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = className;
+    btn.textContent = label;
+    btn.addEventListener('click', onClick);
+    footer.appendChild(btn);
+  }
+
+  function openStatusModal(lead) {
+    var body = '<form id="status-form" class="finance-form" novalidate>' +
+      '<div class="field"><label class="field-label">New status</label><select class="field-select" id="sf-status">' +
+      CUST_UI.options(CUST_UI.LEAD_STATUSES, lead.leadStatus) + '</select></div>' +
+      '<div class="field"><label class="field-label">Reason (required for LOST)</label>' +
+      '<input class="field-input" type="text" id="sf-reason" maxlength="300"></div>' +
+      '<div class="field-error" id="sf-error" hidden></div></form>';
+    openModal('Change status - ' + esc(lead.leadName || ''), body, 'Update status', function (confirmBtn) {
+      var status = el('sf-status').value;
+      if (status === 'WON') {
+        formError('sf-error', 'Use Convert to client to reach WON.');
+        return;
+      }
+      confirmBtn.disabled = true;
+      callServer('changeLeadStatus', {
+        leadId: lead.leadId,
+        leadStatus: status,
+        reason: el('sf-reason').value.trim()
+      }, function () {
+        APP.toast('Lead status updated.', 'success');
+        APP.closeModal();
+        loadLeads();
+      });
+    });
+  }
+
+  function openReopenModal(lead) {
+    var body = '<form id="reopen-form" class="finance-form" novalidate>' +
+      '<div class="field"><label class="field-label">Reopen reason</label>' +
+      '<input class="field-input" type="text" id="rf-reason" maxlength="300" required></div>' +
+      '<div class="field-error" id="rf-error" hidden></div></form>';
+    openModal('Reopen lead', body, 'Reopen', function (confirmBtn) {
+      var reason = el('rf-reason').value.trim();
+      if (!reason) {
+        formError('rf-error', 'A reason is required.');
+        return;
+      }
+      confirmBtn.disabled = true;
+      callServer('reactivateLead', [lead.leadId, reason], function () {
+        APP.toast('Lead reopened.', 'success');
+        APP.closeModal();
+        loadLeads();
+      });
+    });
+  }
+
+  function openConversionModal(lead) {
+    callServer('findPossibleDuplicateClients', {
+      contactNumber: lead.contactNumber,
+      email: lead.email,
+      facebookProfileUrl: lead.facebookProfileUrl,
+      fullName: lead.leadName,
+      businessOrOrganization: lead.businessOrOrganization
+    }, function (duplicates) {
+      var dupHtml = '';
+      if (duplicates.strong.length || duplicates.possible.length) {
+        dupHtml = CUST_UI.duplicateWarning(duplicates.strong.concat(duplicates.possible), duplicates.strong.length > 0);
+      }
+      var body = '<div class="profile-head"><div class="profile-title">' + esc(lead.leadName || '') + '</div></div>' +
+        '<p class="note-meta">Carried over from the lead - review before converting.</p>' +
+        '<form id="conversion-form" class="finance-form" novalidate>' +
+        '<div class="field"><label class="field-label">Convert as</label>' +
+        '<select class="field-select" id="cv-mode">' +
+        '<option value="CREATE">Create a new client from this lead</option>' +
+        '<option value="LINK">Link to an existing client</option></select></div>' +
+        '<div class="field" id="cv-link-field" hidden><label class="field-label">Existing client ID</label>' +
+        '<input class="field-input" type="text" id="cv-linkid" maxlength="30"></div>' +
+        '<div class="field"><label class="field-label">Full name</label><input class="field-input" type="text" id="cv-name" value="' + esc(lead.leadName || '') + '"></div>' +
+        '<div class="field"><label class="field-label">Contact number</label><input class="field-input" type="tel" id="cv-phone" value="' + esc(lead.contactNumber || '') + '"></div>' +
+        '<div class="field"><label class="field-label">Email</label><input class="field-input" type="email" id="cv-email" value="' + esc(lead.email || '') + '"></div>' +
+        '<div class="field" id="cv-override-field" hidden><label class="field-label">Override reason (possible duplicate)</label>' +
+        '<input class="field-input" type="text" id="cv-override" maxlength="300"></div>' +
+        '<div class="field-error" id="cv-error" hidden></div></form>' + dupHtml;
+      openModal('Convert lead to client', body, 'Confirm conversion', function (confirmBtn) {
+        submitConversion(lead, confirmBtn);
+      });
+      el('cv-mode').addEventListener('change', function () {
+        el('cv-link-field').hidden = el('cv-mode').value !== 'LINK';
+        if (el('cv-mode').value === 'LINK') {
+          el('cv-override-field').hidden = true;
+        } else if (duplicates.possible.length > 0) {
+          el('cv-override-field').hidden = false;
+        }
+      });
+      if (duplicates.possible.length > 0) {
+        el('cv-override-field').hidden = false;
+      }
+      var confirmBtn = el('finance-modal-confirm');
+      if (confirmBtn) {
+        confirmBtn.className = 'btn btn-primary';
+      }
+    });
+  }
+
+  function submitConversion(lead, confirmBtn) {
+    var mode = el('cv-mode').value;
+    var payload = {
+      leadId: lead.leadId,
+      action: mode,
+      clientId: mode === 'LINK' ? el('cv-linkid').value.trim() : undefined,
+      fullName: el('cv-name').value.trim(),
+      contactNumber: el('cv-phone').value.trim(),
+      email: el('cv-email').value.trim(),
+      duplicateOverrideReason: el('cv-override') ? el('cv-override').value.trim() : undefined
+    };
+    if (mode === 'LINK' && !payload.clientId) {
+      formError('cv-error', 'Enter the existing client ID to link.');
+      return;
+    }
+    confirmBtn.disabled = true;
+    callServer('convertLead', payload, function (data) {
+      APP.closeModal();
+      var successBody = '<div class="alert alert-success">Lead converted to client.</div>' +
+        '<p>Client: <strong>' + esc(data.client.fullName || data.client.businessOrOrganization || data.client.clientId) + '</strong></p>' +
+        '<p>Client ID: <code>' + esc(data.client.clientId) + '</code></p>' +
+        '<p class="note-meta">The lead was preserved and marked WON. No booking was created.</p>';
+      openModal('Conversion complete', successBody, 'Done', function (btn) {
+        APP.closeModal();
+        loadLeads();
+      });
+      var confirmBtn2 = el('finance-modal-confirm');
+      if (confirmBtn2) {
+        confirmBtn2.className = 'btn btn-primary';
+      }
+    });
+  }
+
+  /* ================= Shared ================= */
+
+  function openModal(title, bodyHtml, confirmLabel, onConfirm) {
+    var footer = '<button class="btn btn-ghost" type="button" data-modal-close>Cancel</button>' +
+      '<button class="btn btn-primary" type="button" id="finance-modal-confirm">' + esc(confirmLabel) + '</button>';
+    APP.openModal(UI.modal(title, bodyHtml, footer));
+    var confirmBtn = el('finance-modal-confirm');
+    if (confirmBtn && onConfirm) {
+      confirmBtn.addEventListener('click', function () {
+        onConfirm(confirmBtn);
+      });
+    }
+  }
+
+  function renderPagination(containerId, data, onPage) {
+    var container = el(containerId);
+    if (!container) {
+      return;
+    }
+    var totalPages = Math.max(Math.ceil(data.total / data.pageSize), 1);
+    if (totalPages <= 1) {
+      container.innerHTML = '<span class="pagination-info">' + data.total + ' record(s)</span>';
+      return;
+    }
+    container.innerHTML = '<button class="btn btn-ghost btn-sm" type="button" data-page="' + (data.page - 1) + '"' + (data.page <= 1 ? ' disabled' : '') + '>Prev</button>' +
+      '<span class="pagination-info">Page ' + data.page + ' of ' + totalPages + ' (' + data.total + ' records)</span>' +
+      '<button class="btn btn-ghost btn-sm" type="button" data-page="' + (data.page + 1) + '"' + (data.page >= totalPages ? ' disabled' : '') + '>Next</button>';
+    var buttons = container.querySelectorAll('[data-page]');
+    for (var i = 0; i < buttons.length; i++) {
+      buttons[i].addEventListener('click', function () {
+        var page = Number(this.getAttribute('data-page'));
+        if (page >= 1 && page <= totalPages) {
+          onPage(page);
+        }
+      });
+    }
+  }
+
+  function populateFilterOptions() {
+    var typeFilter = el('clients-type-filter');
+    if (typeFilter && typeFilter.options.length === 1) {
+      for (var i = 0; i < CUST_UI.CLIENT_TYPES.length; i++) {
+        typeFilter.appendChild(new Option(CUST_UI.titleCase(CUST_UI.CLIENT_TYPES[i]), CUST_UI.CLIENT_TYPES[i]));
+      }
+    }
+    var sourceFilter = el('clients-source-filter');
+    if (sourceFilter && sourceFilter.options.length === 1) {
+      for (var s = 0; s < CUST_UI.SOURCES.length; s++) {
+        sourceFilter.appendChild(new Option(CUST_UI.titleCase(CUST_UI.SOURCES[s]), CUST_UI.SOURCES[s]));
+      }
+    }
+    var leadStatusFilter = el('leads-status-filter');
+    if (leadStatusFilter && leadStatusFilter.options.length === 1) {
+      for (var st = 0; st < CUST_UI.LEAD_STATUSES.length; st++) {
+        leadStatusFilter.appendChild(new Option(CUST_UI.titleCase(CUST_UI.LEAD_STATUSES[st]), CUST_UI.LEAD_STATUSES[st]));
+      }
+    }
+    var priorityFilter = el('leads-priority-filter');
+    if (priorityFilter && priorityFilter.options.length === 1) {
+      for (var p = 0; p < CUST_UI.PRIORITIES.length; p++) {
+        priorityFilter.appendChild(new Option(CUST_UI.titleCase(CUST_UI.PRIORITIES[p]), CUST_UI.PRIORITIES[p]));
+      }
+    }
+    var leadSourceFilter = el('leads-source-filter');
+    if (leadSourceFilter && leadSourceFilter.options.length === 1) {
+      for (var ls = 0; ls < CUST_UI.SOURCES.length; ls++) {
+        leadSourceFilter.appendChild(new Option(CUST_UI.titleCase(CUST_UI.SOURCES[ls]), CUST_UI.SOURCES[ls]));
+      }
+    }
+  }
+
+  function bindListEvents() {
+    ['clients-search', 'clients-status-filter', 'clients-type-filter', 'clients-source-filter'].forEach(function (id) {
+      var node = el(id);
+      if (node) {
+        node.addEventListener('input', function () {
+          state.clientsPage = 1;
+          loadClients();
+        });
+      }
+    });
+    ['leads-search', 'leads-status-filter', 'leads-priority-filter', 'leads-source-filter'].forEach(function (id) {
+      var node = el(id);
+      if (node) {
+        node.addEventListener('input', function () {
+          state.leadsPage = 1;
+          loadLeads();
+        });
+      }
+    });
+  }
+
+  function onClientsClick(event) {
+    var target = event.target;
+    var addBtn = target.closest('[data-client-action="add"]');
+    if (addBtn) {
+      openClientForm();
+      return;
+    }
+    var view = target.closest('[data-client-view]');
+    if (view) {
+      openClientProfile(view.getAttribute('data-client-view'));
+      return;
+    }
+    var menu = target.closest('[data-client-menu]');
+    if (menu) {
+      openClientMenu(menu.getAttribute('data-client-menu'), menu);
+      return;
+    }
+    var note = target.closest('[data-profile-addnote]');
+    if (note) {
+      openNoteForm(note.getAttribute('data-profile-addnote'));
+      return;
+    }
+    var interaction = target.closest('[data-profile-addinteraction]');
+    if (interaction) {
+      openInteractionForm(interaction.getAttribute('data-profile-addinteraction'), null);
+      return;
+    }
+    var edit = target.closest('[data-profile-edit]');
+    if (edit) {
+      APP.closeModal();
+      callServer('getClient', edit.getAttribute('data-profile-edit'), function (client) {
+        openClientForm(client);
+      });
+      return;
+    }
+  }
+
+  function openClientMenu(clientId, anchor) {
+    if (state.activeMenu) {
+      closeClientMenu();
+    }
+    callServer('getClient', clientId, function (client) {
+      var rect = anchor.getBoundingClientRect();
+      var menu = document.createElement('div');
+      menu.className = 'context-menu';
+      menu.id = 'client-context-menu';
+      menu.style.top = (rect.bottom + 4) + 'px';
+      menu.style.left = Math.min(rect.left, window.innerWidth - 180) + 'px';
+      var items = [
+        { label: 'View', action: function () { openClientProfile(clientId); } },
+        { label: 'Edit', action: function () { openClientForm(client); } }
+      ];
+      if (client.clientStatus !== 'ARCHIVED') {
+        items.push({ label: 'Archive', danger: true, action: function () { confirmArchiveClient(client); } });
+      } else {
+        items.push({ label: 'Reactivate', action: function () { reactivateClient(clientId); } });
+      }
+      for (var i = 0; i < items.length; i++) {
+        var item = document.createElement('button');
+        item.type = 'button';
+        item.className = 'context-item' + (items[i].danger ? ' text-danger' : '');
+        item.textContent = items[i].label;
+        item.addEventListener('click', function (action) {
+          closeClientMenu();
+          action();
+        }.bind(null, items[i].action));
+        menu.appendChild(item);
+      }
+      document.body.appendChild(menu);
+      state.activeMenu = clientId;
+      setTimeout(function () {
+        document.addEventListener('click', closeClientMenu, { once: true });
+      }, 0);
+    });
+  }
+
+  function closeClientMenu() {
+    var menu = document.getElementById('client-context-menu');
+    if (menu) {
+      menu.remove();
+    }
+    state.activeMenu = null;
+  }
+
+  function confirmArchiveClient(client) {
+    var body = '<p>Archive ' + esc(client.fullName || client.businessOrOrganization || 'this client') + '? The record and its history are preserved and the client can be reactivated.</p>';
+    openModal('Archive client', body, 'Archive', function (confirmBtn) {
+      confirmBtn.disabled = true;
+      callServer('archiveClient', { clientId: client.clientId }, function () {
+        APP.toast('Client archived.', 'success');
+        APP.closeModal();
+        loadClients();
+      });
+    });
+    var confirmBtn = el('finance-modal-confirm');
+    if (confirmBtn) {
+      confirmBtn.className = 'btn btn-danger';
+    }
+  }
+
+  function reactivateClient(clientId) {
+    callServer('reactivateClient', clientId, function () {
+      APP.toast('Client reactivated.', 'success');
+      loadClients();
+    });
+  }
+
+  function onLeadsClick(event) {
+    var target = event.target;
+    var addBtn = target.closest('[data-lead-action="add"]');
+    if (addBtn) {
+      openLeadForm();
+      return;
+    }
+    var view = target.closest('[data-lead-view]');
+    if (view) {
+      openLeadDetail(view.getAttribute('data-lead-view'));
+      return;
+    }
+    var menu = target.closest('[data-lead-menu]');
+    if (menu) {
+      openLeadMenu(menu.getAttribute('data-lead-menu'), menu);
+    }
+  }
+
+  function openLeadMenu(leadId, anchor) {
+    callServer('getLead', leadId, function (lead) {
+      var rect = anchor.getBoundingClientRect();
+      var menu = document.createElement('div');
+      menu.className = 'context-menu';
+      menu.style.top = (rect.bottom + 4) + 'px';
+      menu.style.left = Math.min(rect.left, window.innerWidth - 200) + 'px';
+      var items = [
+        { label: 'View', action: function () { openLeadDetail(leadId); } },
+        { label: 'Edit', action: function () { openLeadForm(lead); } }
+      ];
+      var canAct = lead.leadStatus !== 'WON' && lead.leadStatus !== 'LOST' && lead.leadStatus !== 'ARCHIVED';
+      if (canAct) {
+        items.push({ label: 'Change status', action: function () { openStatusModal(lead); } });
+        items.push({ label: 'Convert to client', action: function () { openConversionModal(lead); } });
+        items.push({ label: 'Archive', danger: true, action: function () { confirmArchiveLead(lead); } });
+      } else if (lead.leadStatus === 'LOST' || lead.leadStatus === 'ARCHIVED') {
+        items.push({ label: 'Reopen lead', action: function () { openReopenModal(lead); } });
+      }
+      for (var i = 0; i < items.length; i++) {
+        var item = document.createElement('button');
+        item.type = 'button';
+        item.className = 'context-item' + (items[i].danger ? ' text-danger' : '');
+        item.textContent = items[i].label;
+        item.addEventListener('click', function (action) {
+          menu.remove();
+          action();
+        }.bind(null, items[i].action));
+        menu.appendChild(item);
+      }
+      document.body.appendChild(menu);
+      setTimeout(function () {
+        document.addEventListener('click', function () { menu.remove(); }, { once: true });
+      }, 0);
+    });
+  }
+
+  function confirmArchiveLead(lead) {
+    var body = '<p>Archive lead ' + esc(lead.leadName || '') + '? The lead remains available historically.</p>';
+    openModal('Archive lead', body, 'Archive', function (confirmBtn) {
+      confirmBtn.disabled = true;
+      callServer('archiveLead', { leadId: lead.leadId }, function () {
+        APP.toast('Lead archived.', 'success');
+        APP.closeModal();
+        loadLeads();
+      });
+    });
+    var confirmBtn = el('finance-modal-confirm');
+    if (confirmBtn) {
+      confirmBtn.className = 'btn btn-danger';
+    }
+  }
+
+  /* ================= Lifecycle ================= */
+
+  var clientsActivated = false;
+  var leadsActivated = false;
+
+  function activateClients() {
+    if (!clientsActivated) {
+      clientsActivated = true;
+      el('view-clients').addEventListener('click', onClientsClick);
+      bindListEvents();
+      populateFilterOptions();
+    }
+    state.clientsPage = 1;
+    el('clients-search').value = '';
+    loadClients();
+  }
+
+  function activateLeads() {
+    if (!leadsActivated) {
+      leadsActivated = true;
+      el('view-leads').addEventListener('click', onLeadsClick);
+      populateFilterOptions();
+    }
+    state.leadsPage = 1;
+    el('leads-search').value = '';
+    loadLeads();
+  }
+
+  window.CUSTOMER = {
+    activateClients: activateClients,
+    activateLeads: activateLeads
+  };
+})();
+</script>

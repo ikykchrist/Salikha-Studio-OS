@@ -1,0 +1,93 @@
+<!-- packages-page.html
+     Packages page markup (Sprint 2): package list + add-ons section. -->
+
+<section id="view-packages" class="view" hidden aria-label="Packages">
+  <div class="section-head">
+    <div>
+      <h2 class="section-title">Packages</h2>
+      <p class="section-hint">Service catalog with estimated costs and expected margins. Estimates only - no ledger transactions.</p>
+    </div>
+    <div class="section-actions">
+      <button class="btn btn-primary" type="button" data-package-action="add">Create Package</button>
+      <button class="btn btn-secondary" type="button" data-package-action="add-addon">Create Add-on</button>
+    </div>
+  </div>
+
+  <div class="kpi-grid package-summary-grid" id="packages-summary">
+    <article class="card kpi-card">
+      <div class="kpi-label">Active Packages</div>
+      <div class="kpi-value" id="kpi-active-packages">-</div>
+      <div class="kpi-meta">Currently sellable</div>
+    </article>
+    <article class="card kpi-card">
+      <div class="kpi-label">Average Selling Price</div>
+      <div class="kpi-value" id="kpi-avg-price">-</div>
+      <div class="kpi-meta">Active packages</div>
+    </article>
+    <article class="card kpi-card">
+      <div class="kpi-label">Average Expected Margin</div>
+      <div class="kpi-value" id="kpi-avg-margin">-</div>
+      <div class="kpi-meta">Planning estimate</div>
+    </article>
+    <article class="card kpi-card">
+      <div class="kpi-label">Featured Packages</div>
+      <div class="kpi-value" id="kpi-featured-packages">-</div>
+      <div class="kpi-meta">Marked featured</div>
+    </article>
+  </div>
+
+  <div class="card">
+    <div class="filter-row">
+      <div class="search-box">
+        <span class="search-icon" data-icon="search" aria-hidden="true"></span>
+        <input type="search" id="packages-search" placeholder="Search packages..." aria-label="Search packages">
+      </div>
+      <select class="field-select filter-select" id="packages-type-filter" aria-label="Filter by service type">
+        <option value="">All service types</option>
+      </select>
+    </div>
+    <div class="table-wrap mt-3">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Package</th>
+            <th>Service Type</th>
+            <th>Duration</th>
+            <th class="num">Selling Price</th>
+            <th class="num">Est. Cost</th>
+            <th class="num">Est. Profit</th>
+            <th class="num">Margin</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="packages-table-body"></tbody>
+      </table>
+    </div>
+    <div class="pagination-row" id="packages-pagination"></div>
+  </div>
+
+  <div class="card mt-4">
+    <div class="card-head">
+      <h3 class="card-title">Add-ons</h3>
+      <button class="btn btn-ghost" type="button" data-package-action="add-addon">Create Add-on</button>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Add-on</th>
+            <th>Service Type</th>
+            <th class="num">Selling Price</th>
+            <th class="num">Est. Cost</th>
+            <th class="num">Est. Profit</th>
+            <th class="num">Margin</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="addons-table-body"></tbody>
+      </table>
+    </div>
+  </div>
+</section>

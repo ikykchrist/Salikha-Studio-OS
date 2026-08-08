@@ -1,0 +1,247 @@
+﻿<!-- finance-components.html
+     Cashflow UI helpers: form templates, kind metadata, and safe
+     formatting. All dynamic values are escaped. -->
+
+<script>
+(function () {
+  'use strict';
+
+  function esc(value) {
+    return UI.escapeHtml(value);
+  }
+
+  function money(value) {
+    var num = Number(value || 0);
+    return '\u20B1' + num.toFixed(2);
+  }
+
+  function moneyWithSign(value) {
+    var num = Number(value || 0);
+    return (num >= 0 ? '+' : '') + money(num);
+  }
+
+  var KIND_META = {
+    'general-income': { type: 'GENERAL_INCOME', label: 'General income' },
+    'operating-expense': { type: 'OPERATING_EXPENSE', label: 'Operating expense' },
+    'capital-expense': { type: 'CAPITAL_EXPENSE', label: 'Capital expense' },
+    'owner-capital': { type: 'OWNER_CAPITAL', label: 'Owner capital' },
+    'owner-withdrawal': { type: 'OWNER_WITHDRAWAL', label: 'Owner withdrawal' }
+  };
+
+  var TYPE_LABELS = {
+    GENERAL_INCOME: 'General income',
+    OPERATING_EXPENSE: 'Operating expense',
+    CAPITAL_EXPENSE: 'Capital expense',
+    OWNER_CAPITAL: 'Owner capital',
+    OWNER_WITHDRAWAL: 'Owner withdrawal',
+    TRANSFER_IN: 'Transfer in',
+    TRANSFER_OUT: 'Transfer out',
+    OPENING_BALANCE: 'Opening balance',
+    ADJUSTMENT_IN: 'Adjustment in',
+    ADJUSTMENT_OUT: 'Adjustment out'
+  };
+
+  function typeLabel(type) {
+    return TYPE_LABELS[type] || esc(type);
+  }
+
+  function accountOptions(accounts, selectedId) {
+    var html = '';
+    for (var i = 0; i < accounts.length; i++) {
+      var acc = accounts[i];
+      if (acc.isActive === false) {
+        continue;
+      }
+      var selected = selectedId && String(selectedId) === String(acc.accountId) ? ' selected' : '';
+      html += '<option value="' + esc(acc.accountId) + '"' + selected + '>' + esc(acc.accountName) + ' (' + money(acc.currentBalanceCached) + ')</option>';
+    }
+    return html;
+  }
+
+  function categoryOptions(categories, selectedId) {
+    var html = '<option value="">Auto (system category)</option>';
+    for (var i = 0; i < categories.length; i++) {
+      var cat = categories[i];
+      var selected = selectedId && String(selectedId) === String(cat.categoryId) ? ' selected' : '';
+      html += '<option value="' + esc(cat.categoryId) + '"' + selected + '>' + esc(cat.categoryName) + '</option>';
+    }
+    return html;
+  }
+
+  function field(label, inputHtml, hint) {
+    return '<div class="field"><label class="field-label">' + esc(label) + '</label>' + inputHtml +
+      (hint ? '<span class="field-hint">' + esc(hint) + '</span>' : '') + '</div>';
+  }
+
+  function transactionFormTpl(accounts, categories, today) {
+    var kinds = '';
+    var kindKeys = Object.keys(KIND_META);
+    for (var i = 0; i < kindKeys.length; i++) {
+      var meta = KIND_META[kindKeys[i]];
+      kinds += '<option value="' + esc(kindKeys[i]) + '">' + esc(meta.label) + '</option>';
+    }
+    return '<form id="finance-tx-form" class="finance-form" novalidate>' +
+      field('Transaction kind', '<select class="field-select" id="ft-kind">' + kinds + '</select>') +
+      field('Date', '<input class="field-input" type="date" id="ft-date" value="' + esc(today) + '">') +
+      field('Account', '<select class="field-select" id="ft-account">' + accountOptions(accounts) + '</select>',
+        'Current balance shows inside each account option.') +
+      field('Category', '<select class="field-select" id="ft-category">' + categoryOptions(categories) + '</select>') +
+      field('Amount', '<input class="field-input num-input" type="number" min="0.01" step="0.01" id="ft-amount" placeholder="0.00">') +
+      field('Counterparty (optional)', '<input class="field-input" type="text" id="ft-counterparty" maxlength="120">') +
+      field('Reference number (optional)', '<input class="field-input" type="text" id="ft-reference" maxlength="60">') +
+      field('Description', '<textarea class="field-textarea" id="ft-description" maxlength="300" required></textarea>') +
+      '<div class="field-error" id="ft-error" hidden></div>' +
+      '</form>';
+  }
+
+  function transferFormTpl(accounts, today) {
+    return '<form id="finance-transfer-form" class="finance-form" novalidate>' +
+      field('Date', '<input class="field-input" type="date" id="ftr-date" value="' + esc(today) + '">') +
+      field('Source account', '<select class="field-select" id="ftr-source">' + accountOptions(accounts) + '</select>') +
+      field('Destination account', '<select class="field-select" id="ftr-destination">' + accountOptions(accounts) + '</select>') +
+      field('Amount', '<input class="field-input num-input" type="number" min="0.01" step="0.01" id="ftr-amount" placeholder="0.00">') +
+      field('Reference number (optional)', '<input class="field-input" type="text" id="ftr-reference" maxlength="60">') +
+      field('Description', '<textarea class="field-textarea" id="ftr-description" maxlength="300" required></textarea>') +
+      '<div class="alert alert-info mt-2">A transfer creates two linked ledger records and never changes total business cash.</div>' +
+      '<div class="field-error" id="ftr-error" hidden></div>' +
+      '</form>';
+  }
+
+  function accountFormTpl() {
+    return '<form id="finance-account-form" class="finance-form" novalidate>' +
+      field('Account name', '<input class="field-input" type="text" id="fa-name" maxlength="100" required>') +
+      field('Account type', '<select class="field-select" id="fa-type">' +
+        '<option value="CASH">Cash on Hand</option>' +
+        '<option value="E_WALLET">E-Wallet</option>' +
+        '<option value="BANK">Bank</option>' +
+        '<option value="PETTY_CASH">Petty Cash</option>' +
+        '<option value="OTHER">Other</option>' +
+        '</select>') +
+      field('Institution name (optional)', '<input class="field-input" type="text" id="fa-institution" maxlength="100">') +
+      field('Masked reference (optional)', '<input class="field-input" type="text" id="fa-reference" maxlength="30" placeholder="Last 4 digits only, e.g. 1234">',
+        'Never enter PINs or full account credentials.') +
+      field('Opening balance', '<input class="field-input num-input" type="number" min="0" step="0.01" id="fa-opening" value="0">',
+        'Opening balance is NOT revenue. It records cash already in the account.') +
+      field('Opening balance date', '<input class="field-input" type="date" id="fa-opening-date">') +
+      field('Notes (optional)', '<textarea class="field-textarea" id="fa-notes" maxlength="300"></textarea>') +
+      '<div class="field-error" id="fa-error" hidden></div>' +
+      '</form>';
+  }
+
+  function reconcileFormTpl(accounts, today) {
+    return '<form id="finance-recon-form" class="finance-form" novalidate>' +
+      field('Date', '<input class="field-input" type="date" id="fr-date" value="' + esc(today) + '">') +
+      field('Account', '<select class="field-select" id="fr-account">' + accountOptions(accounts) + '</select>') +
+      '<div class="recon-readonly" id="fr-expected">Expected closing balance: ' + money(0) + '</div>' +
+      field('Actual closing balance', '<input class="field-input num-input" type="number" min="0" step="0.01" id="fr-actual">') +
+      '<div class="recon-readonly" id="fr-difference">Difference: ' + money(0) + '</div>' +
+      field('Explanation', '<textarea class="field-textarea" id="fr-explanation" maxlength="300"></textarea>',
+        'Required when the difference is not zero.') +
+      '<div class="alert alert-info mt-2">Reconciliation never adjusts the ledger automatically.</div>' +
+      '<div class="field-error" id="fr-error" hidden></div>' +
+      '</form>';
+  }
+
+  function statusBadge(status, type) {
+    var tone = 'neutral';
+    if (status === 'VOIDED') {
+      tone = 'danger';
+    } else if (type === 'TRANSFER_IN' || type === 'TRANSFER_OUT') {
+      tone = 'info';
+    } else if (type === 'OPENING_BALANCE') {
+      tone = 'neutral';
+    } else if (String(type).indexOf('INCOME') !== -1 || type === 'OWNER_CAPITAL') {
+      tone = 'success';
+    } else {
+      tone = 'warning';
+    }
+    return UI.badge(status === 'VOIDED' ? 'Voided' : 'Posted', tone);
+  }
+
+  function accountCard(acc) {
+    var active = acc.isActive === false ? UI.badge('Inactive', 'neutral') : UI.badge('Active', 'success');
+    return '<div class="account-row">' +
+      '<div><div class="account-name">' + esc(acc.accountName) + '</div>' +
+      '<div class="account-meta">' + esc(acc.accountType) + ' &middot; ' + esc(acc.institutionName || 'No institution') + '</div></div>' +
+      '<div class="account-balance">' + money(acc.currentBalanceCached) + '</div>' +
+      '<div class="account-status">' + active + '</div>' +
+      '</div>';
+  }
+
+  function txRow(tx, accountMap, categoryMap) {
+    var inflow = tx.direction === 'INFLOW' ? money(tx.amount) : '&mdash;';
+    var outflow = tx.direction === 'OUTFLOW' ? money(tx.amount) : '&mdash;';
+    var accountName = accountMap[tx.accountId] || 'Unknown';
+    var categoryName = categoryMap[tx.categoryId] || 'Auto';
+    return '<tr' + (tx.status === 'VOIDED' ? ' class="row-voided"' : '') + '>' +
+      '<td>' + esc(tx.transactionDate) + '</td>' +
+      '<td>' + esc(tx.description) + '</td>' +
+      '<td>' + esc(categoryName) + '</td>' +
+      '<td>' + esc(accountName) + '</td>' +
+      '<td>' + typeLabel(tx.transactionType) + '</td>' +
+      '<td class="num">' + inflow + '</td>' +
+      '<td class="num">' + outflow + '</td>' +
+      '<td>' + statusBadge(tx.status, tx.transactionType) + '</td>' +
+      '<td><button class="btn btn-ghost btn-sm" type="button" data-tx-detail="' + esc(tx.transactionId) + '">View</button>' +
+      (tx.status !== 'VOIDED' ? ' <button class="btn btn-ghost btn-sm text-danger" type="button" data-tx-void="' + esc(tx.transactionId) + '">Void</button>' : '') +
+      '</td></tr>';
+  }
+
+  function detailViewTpl(tx, accountMap, categoryMap) {
+    var accountName = accountMap[tx.accountId] || 'Unknown';
+    var categoryName = categoryMap[tx.categoryId] || 'Auto';
+    function row(label, value) {
+      return '<tr><th>' + esc(label) + '</th><td>' + value + '</td></tr>';
+    }
+    var html = '<table class="data-table detail-table">' +
+      row('Transaction ID', esc(tx.transactionId)) +
+      row('Date', esc(tx.transactionDate)) +
+      row('Date and time', esc(tx.transactionDatetime)) +
+      row('Type', typeLabel(tx.transactionType)) +
+      row('Direction', esc(tx.direction)) +
+      row('Account', esc(accountName)) +
+      row('Category', esc(categoryName)) +
+      row('Amount', money(tx.amount)) +
+      row('Description', esc(tx.description)) +
+      row('Counterparty', esc(tx.counterparty || '-')) +
+      row('Reference', esc(tx.referenceNumber || '-')) +
+      row('Status', statusBadge(tx.status, tx.transactionType)) +
+      row('Created by', esc(tx.createdBy || '-')) +
+      row('Created at', esc(tx.createdAt || '-'));
+    if (tx.status === 'VOIDED') {
+      html += row('Voided by', esc(tx.voidedBy || '-')) +
+        row('Voided at', esc(tx.voidedAt || '-')) +
+        row('Void reason', esc(tx.voidReason || '-'));
+    }
+    if (tx.transferGroupId) {
+      html += row('Transfer group', esc(tx.transferGroupId));
+    }
+    html += '</table>';
+    return html;
+  }
+
+  function initStateBanner(html) {
+    return '<div class="alert ' + (html.tone || 'alert-info') + '">' + esc(html.message) + '</div>';
+  }
+
+  window.FIN_UI = {
+    esc: esc,
+    money: money,
+    moneyWithSign: moneyWithSign,
+    KIND_META: KIND_META,
+    typeLabel: typeLabel,
+    accountOptions: accountOptions,
+    categoryOptions: categoryOptions,
+    transactionFormTpl: transactionFormTpl,
+    transferFormTpl: transferFormTpl,
+    accountFormTpl: accountFormTpl,
+    reconcileFormTpl: reconcileFormTpl,
+    statusBadge: statusBadge,
+    accountCard: accountCard,
+    txRow: txRow,
+    detailViewTpl: detailViewTpl,
+    initStateBanner: initStateBanner
+  };
+})();
+</script>
+

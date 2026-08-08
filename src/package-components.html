@@ -1,0 +1,187 @@
+<!-- package-components.html
+     Packages UI templates (Sprint 2): package form with live profit
+     preview, item editor, and add-on templates. window.PKG_UI. -->
+
+<script>
+(function () {
+  'use strict';
+
+  function esc(value) {
+    return UI.escapeHtml(value);
+  }
+
+  function money(value) {
+    return '\u20B1' + Number(value || 0).toFixed(2);
+  }
+
+  var SERVICE_TYPES = ['PHOTOBOOTH', 'PHOTOMAN', 'PHOTOGRAPHY', 'PRINTING', 'STUDIO_SERVICE', 'CUSTOM', 'OTHER'];
+  var ITEM_TYPES = ['INCLUSION', 'SERVICE', 'CONSUMABLE_ESTIMATE', 'EQUIPMENT_REQUIREMENT', 'CREW_REQUIREMENT', 'DELIVERABLE', 'OTHER'];
+  var COST_METHODS = ['MANUAL', 'PACKAGE_ITEMS'];
+
+  function titleCase(value) {
+    return String(value || '').toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+  }
+
+  function options(values, selected) {
+    var html = '';
+    for (var i = 0; i < values.length; i++) {
+      var sel = selected === values[i] ? ' selected' : '';
+      html += '<option value="' + esc(values[i]) + '"' + sel + '>' + esc(titleCase(values[i])) + '</option>';
+    }
+    return html;
+  }
+
+  function field(label, inputHtml, hint) {
+    return '<div class="field"><label class="field-label">' + esc(label) + '</label>' + inputHtml +
+      (hint ? '<span class="field-hint">' + esc(hint) + '</span>' : '') + '</div>';
+  }
+
+  function packageRow(pkg) {
+    var inactive = pkg.isActive === false;
+    var margin = Number(pkg.expectedProfitMargin || 0);
+    var marginTone = margin < 0 ? 'danger' : margin < 15 ? 'warning' : 'success';
+    return '<tr class="' + (inactive ? 'row-voided' : '') + '">' +
+      '<td><div class="cell-main">' + esc(pkg.packageName) + '</div>' +
+      (pkg.isFeatured ? UI.badge('Featured', 'info') : '') + '</td>' +
+      '<td>' + esc(titleCase(pkg.serviceType)) + '</td>' +
+      '<td>' + esc(pkg.durationHours ? pkg.durationHours + ' hr' : '-') + '</td>' +
+      '<td class="num">' + money(pkg.basePrice) + '</td>' +
+      '<td class="num">' + money(pkg.expectedDirectCost) + '</td>' +
+      '<td class="num">' + money(pkg.expectedGrossProfit) + '</td>' +
+      '<td class="num">' + UI.badge(margin.toFixed(2) + '%', marginTone) + '</td>' +
+      '<td>' + (inactive ? UI.badge('Inactive', 'neutral') : UI.badge('Active', 'success')) + '</td>' +
+      '<td><div class="row-actions">' +
+      '<button class="btn btn-ghost btn-sm" type="button" data-package-view="' + esc(pkg.packageId) + '">View</button>' +
+      '<button class="btn btn-ghost btn-sm" type="button" data-package-menu="' + esc(pkg.packageId) + '" aria-label="More actions">\u22EE</button>' +
+      '</div></td></tr>';
+  }
+
+  function addOnRow(addOn) {
+    var inactive = addOn.isActive === false;
+    var margin = Number(addOn.expectedProfitMargin || 0);
+    return '<tr class="' + (inactive ? 'row-voided' : '') + '">' +
+      '<td>' + esc(addOn.addOnName) + '</td>' +
+      '<td>' + esc(titleCase(addOn.serviceType)) + '</td>' +
+      '<td class="num">' + money(addOn.sellingPrice) + '</td>' +
+      '<td class="num">' + money(addOn.estimatedDirectCost) + '</td>' +
+      '<td class="num">' + money(addOn.expectedGrossProfit) + '</td>' +
+      '<td class="num">' + margin.toFixed(2) + '%</td>' +
+      '<td>' + (inactive ? UI.badge('Inactive', 'neutral') : UI.badge('Active', 'success')) + '</td>' +
+      '<td><div class="row-actions">' +
+      '<button class="btn btn-ghost btn-sm" type="button" data-addon-edit="' + esc(addOn.addOnId) + '">Edit</button>' +
+      (inactive
+        ? '<button class="btn btn-ghost btn-sm" type="button" data-addon-activate="' + esc(addOn.addOnId) + '">Activate</button>'
+        : '<button class="btn btn-ghost btn-sm text-danger" type="button" data-addon-deactivate="' + esc(addOn.addOnId) + '">Deactivate</button>') +
+      '</div></td></tr>';
+  }
+
+  function packageFormTpl(pkg) {
+    pkg = pkg || {};
+    return '<form id="package-form" class="finance-form" novalidate>' +
+      '<h4 class="form-section-title">Basic information</h4>' +
+      field('Package name', '<input class="field-input" type="text" id="pf-name" maxlength="150" value="' + esc(pkg.packageName || '') + '" required>') +
+      '<div class="form-row">' +
+      field('Service type', '<select class="field-select" id="pf-type">' + options(SERVICE_TYPES, pkg.serviceType || 'PHOTOBOOTH') + '</select>') +
+      field('Duration (hours)', '<input class="field-input num-input" type="number" min="0.5" step="0.5" id="pf-duration" value="' + esc(pkg.durationHours || '') + '">') +
+      '</div>' +
+      field('Description', '<textarea class="field-textarea" id="pf-description" maxlength="500">' + esc(pkg.description || '') + '</textarea>') +
+      '<h4 class="form-section-title">Pricing and cost estimate</h4>' +
+      field('Base price (PHP)', '<input class="field-input num-input" type="number" min="0" step="0.01" id="pf-price" value="' + esc(pkg.basePrice || '') + '" required>') +
+      field('Cost calculation method', '<select class="field-select" id="pf-method">' + options(COST_METHODS, pkg.costCalculationMethod || 'MANUAL') + '</select>',
+        'PACKAGE_ITEMS sums the item editor costs; MANUAL uses the entered estimate.') +
+      '<div class="field" id="pf-manual-field"><label class="field-label">Manual expected direct cost (PHP)</label>' +
+      '<input class="field-input num-input" type="number" min="0" step="0.01" id="pf-cost" value="' + esc(pkg.expectedDirectCost || '') + '"></div>' +
+      '<div class="profit-preview" id="pf-preview">' +
+      '<div class="breakdown-item"><span class="breakdown-label">Expected gross profit</span><span class="breakdown-value" id="pf-gross">' + money(0) + '</span></div>' +
+      '<div class="breakdown-item"><span class="breakdown-label">Expected margin</span><span class="breakdown-value" id="pf-margin">0.00%</span></div>' +
+      '</div>' +
+      '<div class="form-row">' +
+      field('Extra hour rate', '<input class="field-input num-input" type="number" min="0" step="0.01" id="pf-extra" value="' + esc(pkg.extraHourRate || '') + '">') +
+      field('Minimum booking amount', '<input class="field-input num-input" type="number" min="0" step="0.01" id="pf-minimum" value="' + esc(pkg.minimumBookingAmount || '') + '">') +
+      '</div>' +
+      '<h4 class="form-section-title">Terms and visibility</h4>' +
+      field('Terms summary', '<textarea class="field-textarea" id="pf-terms" maxlength="500">' + esc(pkg.termsSummary || '') + '</textarea>') +
+      '<div class="form-row form-checks">' +
+      checkBox('pf-customizable', 'Customizable', pkg.isCustomizable) +
+      checkBox('pf-featured', 'Featured', pkg.isFeatured) +
+      '</div>' +
+      '<div class="field-error" id="pf-error" hidden></div>' +
+      '</form>';
+  }
+
+  function checkBox(id, label, checked) {
+    return '<label class="check-label"><input type="checkbox" id="' + id + '"' + (checked ? ' checked' : '') + '> ' + esc(label) + '</label>';
+  }
+
+  function addOnFormTpl(addOn) {
+    addOn = addOn || {};
+    return '<form id="addon-form" class="finance-form" novalidate>' +
+      field('Add-on name', '<input class="field-input" type="text" id="af-name" maxlength="150" value="' + esc(addOn.addOnName || '') + '" required>') +
+      '<div class="form-row">' +
+      field('Service type', '<select class="field-select" id="af-type">' + options(SERVICE_TYPES, addOn.serviceType || 'OTHER') + '</select>') +
+      field('Unit', '<input class="field-input" type="text" id="af-unit" maxlength="50" value="' + esc(addOn.unit || '') + '">') +
+      '</div>' +
+      field('Description', '<textarea class="field-textarea" id="af-description" maxlength="500">' + esc(addOn.description || '') + '</textarea>') +
+      '<div class="form-row">' +
+      field('Selling price (PHP)', '<input class="field-input num-input" type="number" min="0" step="0.01" id="af-price" value="' + esc(addOn.sellingPrice || '') + '" required>') +
+      field('Estimated direct cost (PHP)', '<input class="field-input num-input" type="number" min="0" step="0.01" id="af-cost" value="' + esc(addOn.estimatedDirectCost || '') + '">') +
+      '</div>' +
+      '<div class="profit-preview" id="af-preview">' +
+      '<div class="breakdown-item"><span class="breakdown-label">Expected profit</span><span class="breakdown-value" id="af-profit">' + money(0) + '</span></div>' +
+      '<div class="breakdown-item"><span class="breakdown-label">Expected margin</span><span class="breakdown-value" id="af-margin">0.00%</span></div>' +
+      '</div>' +
+      '<div class="field-error" id="af-error" hidden></div></form>';
+  }
+
+  function itemEditorTpl(items) {
+    var rows = '';
+    if (!items.length) {
+      rows = itemRowTpl(null, 0);
+    } else {
+      for (var i = 0; i < items.length; i++) {
+        rows += itemRowTpl(items[i], i);
+      }
+    }
+    return '<div class="item-editor" id="item-editor">' +
+      '<div class="item-editor-head">' +
+      '<span>Item</span><span>Type</span><span>Qty</span><span>Unit</span><span>Unit cost</span><span>Total</span><span></span>' +
+      '</div>' +
+      '<div id="item-rows">' + rows + '</div>' +
+      '<div class="item-editor-foot">' +
+      '<button class="btn btn-secondary btn-sm" type="button" id="item-add-row">Add row</button>' +
+      '<span class="item-total">Estimated total item cost: <strong id="item-total-value">' + money(0) + '</strong></span>' +
+      '</div>' +
+      '<div class="field-error" id="item-error" hidden></div>' +
+      '</div>';
+  }
+
+  function itemRowTpl(item, index) {
+    item = item || {};
+    return '<div class="item-row" data-index="' + index + '">' +
+      '<input class="field-input" type="text" data-item-field="itemName" placeholder="Item name" maxlength="150" value="' + esc(item.itemName || '') + '">' +
+      '<select class="field-select" data-item-field="itemType">' + options(ITEM_TYPES, item.itemType || 'INCLUSION') + '</select>' +
+      '<input class="field-input num-input" type="number" min="1" step="1" data-item-field="quantity" value="' + esc(item.quantity || 1) + '">' +
+      '<input class="field-input" type="text" data-item-field="unit" placeholder="e.g. pack" maxlength="30" value="' + esc(item.unit || '') + '">' +
+      '<input class="field-input num-input" type="number" min="0" step="0.01" data-item-field="estimatedUnitCost" value="' + esc(item.estimatedUnitCost || '') + '">' +
+      '<span class="item-row-total num" data-item-total>' + money((Number(item.estimatedUnitCost || 0)) * (Number(item.quantity || 1))) + '</span>' +
+      '<button class="btn btn-ghost btn-sm" type="button" data-item-remove aria-label="Remove row">\u2715</button>' +
+      '</div>';
+  }
+
+  window.PKG_UI = {
+    esc: esc,
+    money: money,
+    titleCase: titleCase,
+    options: options,
+    packageRow: packageRow,
+    addOnRow: addOnRow,
+    packageFormTpl: packageFormTpl,
+    addOnFormTpl: addOnFormTpl,
+    itemEditorTpl: itemEditorTpl,
+    itemRowTpl: itemRowTpl,
+    SERVICE_TYPES: SERVICE_TYPES,
+    ITEM_TYPES: ITEM_TYPES,
+    COST_METHODS: COST_METHODS
+  };
+})();
+</script>

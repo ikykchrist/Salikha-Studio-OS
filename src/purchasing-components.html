@@ -1,0 +1,294 @@
+<!-- purchasing-components.html
+     UI templates for the Purchasing page (Sprint 5/9 completion).
+     Uses window.PURCHASING_UI; no business logic. -->
+
+<script>
+(function () {
+  'use strict';
+
+  function esc(value) {
+    return String(value == null ? '' : value)
+      .replace(/&/g, '&')
+      .replace(/</g, '<')
+      .replace(/>/g, '>')
+      .replace(/"/g, '"')
+      .replace(/'/g, ''');
+  }
+
+  function money(value) {
+    var n = Number(value || 0);
+    return '\u20B1' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  }
+
+  function titleCase(value) {
+    return String(value || '').toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+  }
+
+  function statusBadge(status) {
+    var tone = 'neutral';
+    switch (String(status)) {
+      case 'DRAFT': tone = 'neutral'; break;
+      case 'ORDERED': tone = 'info'; break;
+      case 'PARTIALLY_RECEIVED': tone = 'warning'; break;
+      case 'RECEIVED': tone = 'success'; break;
+      case 'CANCELLED': tone = 'danger'; break;
+      default: tone = 'neutral';
+    }
+    return '<span class="badge badge-' + tone + '">' + esc(titleCase(status)) + '</span>';
+  }
+
+  function supplierRow(row) {
+    var s = row.supplier || {};
+    var status = s.isActive === false
+      ? '<span class="badge badge-danger">Inactive</span>'
+      : '<span class="badge badge-success">Active</span>';
+    return '<tr data-supplier-id="' + esc(s.supplierId) + '">' +
+      '<td>' + esc(s.name || '-') + '</td>' +
+      '<td class="num">' + esc(row.purchaseCount || 0) + '</td>' +
+      '<td>' + esc(row.lastPurchaseDate || '-') + '</td>' +
+      '<td>' + status + '</td>' +
+      '</tr>';
+  }
+
+  function purchaseRow(row) {
+    var p = row.purchase || {};
+    var id = esc(p.purchaseId || '');
+    var supplierId = esc(p.supplierId || '');
+    var progress = row.progressPct != null ? row.progressPct : 0;
+    var progressLabel = row.receivedTotal != null && row.orderedTotal != null
+      ? esc(row.receivedTotal) + ' / ' + esc(row.orderedTotal)
+      : '-';
+    var actions = '';
+    if (p.status === 'DRAFT') {
+      actions += '<button class="btn btn-secondary btn-sm" type="button" data-purchase-action="edit" data-purchase-id="' + id + '">Edit</button> ';
+      actions += '<button class="btn btn-primary btn-sm" type="button" data-purchase-action="place" data-purchase-id="' + id + '">Place Order</button> ';
+    }
+    if (p.status === 'ORDERED' || p.status === 'PARTIALLY_RECEIVED') {
+      actions += '<button class="btn btn-primary btn-sm" type="button" data-purchase-action="receive" data-purchase-id="' + id + '">Receive</button> ';
+    }
+    if (p.status === 'DRAFT' || p.status === 'ORDERED' || p.status === 'PARTIALLY_RECEIVED') {
+      actions += '<button class="btn btn-danger btn-sm" type="button" data-purchase-action="cancel" data-purchase-id="' + id + '">Cancel</button> ';
+    }
+    actions += '<button class="btn btn-ghost btn-sm" type="button" data-purchase-action="view" data-purchase-id="' + id + '">View</button>';
+    return '<tr data-purchase-id="' + id + '" data-purchase-supplier="' + supplierId + '">' +
+      '<td><code>' + id + '</code></td>' +
+      '<td>' + esc(row.supplierName || '-') + '</td>' +
+      '<td>' + esc(p.purchaseDate || '-') + '</td>' +
+      '<td class="num">' + esc(row.lineCount || 0) + '</td>' +
+      '<td class="num">' + money(p.total || 0) + '</td>' +
+      '<td>' +
+        '<div class="progress" role="progressbar" aria-valuenow="' + progress + '" aria-valuemin="0" aria-valuemax="100">' +
+          '<div class="progress-bar" style="width:' + progress + '%"></div>' +
+        '</div>' +
+        '<small class="progress-label">' + progressLabel + '</small>' +
+      '</td>' +
+      '<td>' + statusBadge(p.status) + '</td>' +
+      '<td class="actions-cell">' + actions + '</td>' +
+      '</tr>';
+  }
+
+  function purchaseDetail(detail) {
+    var p = detail.purchase || {};
+    var lines = p.lines || [];
+    var history = detail.receiptHistory || [];
+    var lineRows = '';
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      var received = Number(line.receivedQty || 0);
+      var ordered = Number(line.quantity || 0);
+      var outstanding = Math.max(0, ordered - received);
+      var canReceive = (p.status === 'ORDERED' || p.status === 'PARTIALLY_RECEIVED') && outstanding > 0;
+      lineRows += '<tr data-line-id="' + esc(line.purchaseItemId) + '">' +
+        '<td>' + esc(line.itemName || line.equipmentName || '-') + '</td>' +
+        '<td class="num">' + esc(ordered) + '</td>' +
+        '<td class="num">' + esc(received) + '</td>' +
+        '<td class="num">' + esc(outstanding) + '</td>' +
+        '<td class="num">' + money(line.unitCost || 0) + '</td>' +
+        '<td class="num">' + money(line.lineTotal || 0) + '</td>' +
+        '<td>' + (canReceive
+          ? '<input class="field-input num-input line-receive-qty" type="number" min="0" max="' + esc(outstanding) + '" step="0.01" value="0" data-line-id="' + esc(line.purchaseItemId) + '" data-line-outstanding="' + esc(outstanding) + '" aria-label="Receive quantity for ' + esc(line.itemName || line.equipmentName || '') + '">'
+          : '<span class="text-muted">-</span>') + '</td>' +
+        '</tr>';
+    }
+    var histRows = '';
+    if (!history.length) {
+      histRows = '<tr><td colspan="6" class="text-muted">No receipts yet.</td></tr>';
+    } else {
+      for (var h = 0; h < history.length; h++) {
+        var r = history[h];
+        histRows += '<tr>' +
+          '<td>' + esc(r.receivedAt || '-') + '</td>' +
+          '<td>' + esc(r.itemId || '-') + '</td>' +
+          '<td class="num">' + esc(r.quantity) + '</td>' +
+          '<td class="num">' + money(r.unitCost) + '</td>' +
+          '<td class="num">' + money(r.value) + '</td>' +
+          '<td>' + esc(r.actor || '-') + '</td>' +
+          '</tr>';
+      }
+    }
+    var headerActions = '';
+    if (p.status === 'DRAFT') {
+      headerActions += '<button class="btn btn-secondary" type="button" data-purchase-action="edit" data-purchase-id="' + esc(p.purchaseId) + '">Edit</button> ';
+      headerActions += '<button class="btn btn-primary" type="button" data-purchase-action="place" data-purchase-id="' + esc(p.purchaseId) + '">Place Order</button> ';
+    }
+    if (p.status === 'ORDERED' || p.status === 'PARTIALLY_RECEIVED') {
+      headerActions += '<button class="btn btn-primary" type="button" data-purchase-action="open-receive" data-purchase-id="' + esc(p.purchaseId) + '">Receive Items</button> ';
+    }
+    if (p.status === 'DRAFT' || p.status === 'ORDERED' || p.status === 'PARTIALLY_RECEIVED') {
+      headerActions += '<button class="btn btn-danger" type="button" data-purchase-action="cancel" data-purchase-id="' + esc(p.purchaseId) + '">Cancel</button> ';
+    }
+    headerActions += '<button class="btn btn-ghost" type="button" data-purchase-action="close-detail">Close</button>';
+    return '<div class="card detail-card">' +
+      '<div class="card-head">' +
+        '<h3 class="card-title">Purchase ' + esc(p.purchaseId) + '</h3>' +
+        '<div class="section-actions">' + headerActions + '</div>' +
+      '</div>' +
+      '<div class="detail-grid">' +
+        profileItem('Supplier', esc(p.supplierName || '-')) +
+        profileItem('Order Date', esc(p.purchaseDate || '-')) +
+        profileItem('Status', statusBadge(p.status)) +
+        profileItem('Total', money(p.total || 0)) +
+        profileItem('Shipping', money(p.shippingCost || 0)) +
+        profileItem('Notes', esc(p.notes || '-')) +
+      '</div>' +
+      '<h4 class="section-title mt-3">Lines</h4>' +
+      '<div class="table-wrap">' +
+        '<table class="data-table">' +
+          '<thead><tr><th>Item</th><th class="num">Ordered</th><th class="num">Received</th><th class="num">Outstanding</th><th class="num">Unit Cost</th><th class="num">Line Total</th><th>Receive Now</th></tr></thead>' +
+          '<tbody>' + lineRows + '</tbody>' +
+        '</table>' +
+      '</div>' +
+      '<h4 class="section-title mt-3">Receipt History</h4>' +
+      '<div class="table-wrap">' +
+        '<table class="data-table">' +
+          '<thead><tr><th>Received At</th><th>Item</th><th class="num">Quantity</th><th class="num">Unit Cost</th><th class="num">Value</th><th>Actor</th></tr></thead>' +
+          '<tbody>' + histRows + '</tbody>' +
+        '</table>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function profileItem(label, value) {
+    return '<div class="profile-item"><div class="profile-label">' + esc(label) + '</div><div class="profile-value">' + value + '</div></div>';
+  }
+
+  function purchaseForm(ctx) {
+    var suppliers = (ctx.lookups && ctx.lookups.suppliers) || [];
+    var inventoryItems = (ctx.lookups && ctx.lookups.inventoryItems) || [];
+    var editing = ctx.editing || null;
+    var lines = editing && editing.lines ? editing.lines : [];
+    var supplierOptions = '<option value="">Select supplier</option>' +
+      suppliers.map(function (s) {
+        var sel = editing && String(editing.supplierId) === String(s.supplierId) ? ' selected' : '';
+        var disabled = s.isActive === false ? ' disabled' : '';
+        return '<option value="' + esc(s.supplierId) + '"' + sel + disabled + '>' + esc(s.name) + (s.isActive === false ? ' (inactive)' : '') + '</option>';
+      }).join('');
+    var itemOptions = inventoryItems.map(function (i) {
+      return '<option value="' + esc(i.itemId) + '">' + esc(i.sku) + ' - ' + esc(i.name) + ' (' + esc(i.unit) + ')</option>';
+    }).join('');
+    var lineRows = '';
+    for (var i = 0; i < lines.length; i++) {
+      lineRows += lineRowTpl(i, lines[i], itemOptions);
+    }
+    return '<form id="purchase-form">' +
+      '<div class="form-grid">' +
+        '<div class="field"><label class="field-label">Supplier *</label>' +
+          '<select class="field-select" id="pf-supplier" required>' + supplierOptions + '</select></div>' +
+        '<div class="field"><label class="field-label">Order Date *</label>' +
+          '<input class="field-input" type="date" id="pf-date" value="' + esc(editing ? editing.purchaseDate : ctx.today) + '" required></div>' +
+        '<div class="field"><label class="field-label">Expected Delivery</label>' +
+          '<input class="field-input" type="date" id="pf-expected" value="' + esc(editing && editing.expectedDate ? editing.expectedDate : '') + '"></div>' +
+        '<div class="field"><label class="field-label">Shipping Cost</label>' +
+          '<input class="field-input num-input" type="number" min="0" step="0.01" id="pf-shipping" value="' + esc(editing ? editing.shippingCost : 0) + '"></div>' +
+      '</div>' +
+      '<div class="field"><label class="field-label">Notes</label>' +
+        '<textarea class="field-input" id="pf-notes" rows="2" maxlength="500">' + esc(editing ? editing.notes : '') + '</textarea></div>' +
+      '<h4 class="section-title mt-3">Purchase Lines</h4>' +
+      '<div class="purchase-lines" id="pf-lines">' + (lineRows || lineRowTpl(0, null, itemOptions)) + '</div>' +
+      '<button class="btn btn-secondary btn-sm mt-2" type="button" id="pf-add-line">Add Line</button>' +
+      '<div class="mt-3"><strong>Total:</strong> <span id="pf-total">\u20B10.00</span></div>' +
+    '</form>';
+  }
+
+  function lineRowTpl(index, line, itemOptions) {
+    var itemId = line && line.inventoryItemId ? line.inventoryItemId : '';
+    var qty = line ? line.quantity : '';
+    var cost = line ? line.unitCost : '';
+    var opts = '<option value="">Select inventory item</option>' + itemOptions.replace(
+      new RegExp('value="' + itemId + '"'),
+      'value="' + itemId + '" selected'
+    );
+    return '<div class="purchase-line-row" data-line-index="' + index + '">' +
+      '<select class="field-select pf-line-item" aria-label="Inventory item">' + opts + '</select>' +
+      '<input class="field-input num-input pf-line-qty" type="number" min="0" step="0.01" placeholder="Qty" value="' + esc(qty) + '" aria-label="Quantity">' +
+      '<input class="field-input num-input pf-line-cost" type="number" min="0" step="0.01" placeholder="Unit cost" value="' + esc(cost) + '" aria-label="Unit cost">' +
+      '<span class="purchase-line-total">\u20B10.00</span>' +
+      '<button class="btn btn-ghost btn-sm pf-line-remove" type="button" aria-label="Remove line">\u00D7</button>' +
+      '</div>';
+  }
+
+  function supplierForm(supplier) {
+    return '<form id="supplier-form">' +
+      '<div class="form-grid">' +
+        '<div class="field"><label class="field-label">Supplier Name *</label>' +
+          '<input class="field-input" type="text" id="sf-name" maxlength="120" required value="' + esc(supplier && supplier.name || '') + '"></div>' +
+        '<div class="field"><label class="field-label">Contact Person</label>' +
+          '<input class="field-input" type="text" id="sf-contact" maxlength="120" value="' + esc(supplier && supplier.contactPerson || '') + '"></div>' +
+        '<div class="field"><label class="field-label">Phone</label>' +
+          '<input class="field-input" type="text" id="sf-phone" maxlength="40" value="' + esc(supplier && supplier.phone || '') + '"></div>' +
+        '<div class="field"><label class="field-label">Email</label>' +
+          '<input class="field-input" type="email" id="sf-email" maxlength="120" value="' + esc(supplier && supplier.email || '') + '"></div>' +
+        '<div class="field"><label class="field-label">Payment Terms (days)</label>' +
+          '<input class="field-input num-input" type="number" min="0" step="1" id="sf-terms" value="' + esc(supplier && supplier.paymentTermsDays || 0) + '"></div>' +
+        '<div class="field"><label class="field-label">Address</label>' +
+          '<input class="field-input" type="text" id="sf-address" maxlength="240" value="' + esc(supplier && supplier.address || '') + '"></div>' +
+      '</div>' +
+      '<div class="field"><label class="field-label">Notes</label>' +
+        '<textarea class="field-input" id="sf-notes" rows="2" maxlength="500">' + esc(supplier && supplier.notes || '') + '</textarea></div>' +
+    '</form>';
+  }
+
+  function receiveForm(detail) {
+    var p = detail.purchase || {};
+    var lines = p.lines || [];
+    var rows = '';
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      var received = Number(line.receivedQty || 0);
+      var ordered = Number(line.quantity || 0);
+      var outstanding = Math.max(0, ordered - received);
+      var disabled = outstanding <= 0 ? ' disabled' : '';
+      rows += '<div class="receive-line-row" data-line-id="' + esc(line.purchaseItemId) + '">' +
+        '<div class="receive-line-head"><strong>' + esc(line.itemName || line.equipmentName || '-') + '</strong></div>' +
+        '<div class="receive-line-meta">' +
+          '<span>Ordered: <strong>' + esc(ordered) + '</strong></span>' +
+          '<span>Received: <strong>' + esc(received) + '</strong></span>' +
+          '<span>Outstanding: <strong>' + esc(outstanding) + '</strong></span>' +
+        '</div>' +
+        '<input class="field-input num-input rf-qty" type="number" min="0" max="' + esc(outstanding) + '" step="0.01" value="' + esc(outstanding) + '" data-line-id="' + esc(line.purchaseItemId) + '" data-line-outstanding="' + esc(outstanding) + '"' + disabled + ' aria-label="Receive quantity">' +
+      '</div>';
+    }
+    return '<form id="receive-form">' +
+      '<div class="field"><label class="field-label">Received Date</label>' +
+        '<input class="field-input" type="date" id="rf-date" value="' + esc(new Date().toISOString().substring(0, 10)) + '"></div>' +
+      '<div class="receive-lines">' + rows + '</div>' +
+      '<div class="field"><label class="field-label">Idempotency Key (required)</label>' +
+        '<input class="field-input" type="text" id="rf-key" required value="recv-' + esc(Date.now()) + '-' + Math.random().toString(36).substring(2, 8) + '" maxlength="80"></div>' +
+    '</form>';
+  }
+
+  window.PURCHASING_UI = {
+    esc: esc,
+    money: money,
+    titleCase: titleCase,
+    statusBadge: statusBadge,
+    supplierRow: supplierRow,
+    purchaseRow: purchaseRow,
+    purchaseDetail: purchaseDetail,
+    purchaseForm: purchaseForm,
+    lineRowTpl: lineRowTpl,
+    supplierForm: supplierForm,
+    receiveForm: receiveForm
+  };
+})();
+</script>

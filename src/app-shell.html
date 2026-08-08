@@ -1,0 +1,212 @@
+﻿<!-- app-shell.html
+     Application layout: sidebar, header, main area, dashboard placeholder,
+     and the placeholder container for all module pages. -->
+
+<div class="app">
+
+  <aside class="sidebar" id="sidebar" aria-label="Sidebar">
+    <div class="sidebar-brand">
+      <span class="brand-mark" aria-hidden="true">SS</span>
+      <span class="brand-name">Salikha Studio OS</span>
+    </div>
+
+    <nav class="sidebar-nav" id="sidebar-nav" aria-label="Main navigation"></nav>
+
+    <div class="sidebar-footer">
+      <div class="conn-status" id="conn-status" role="status" aria-live="polite">
+        <span class="conn-dot" aria-hidden="true"></span>
+        <span class="conn-text">Checking connection&hellip;</span>
+      </div>
+      <div class="app-version" id="app-version">v0.8.0-dashboard-reports</div>
+    </div>
+  </aside>
+
+  <div class="scrim" id="scrim" hidden></div>
+
+  <div class="main">
+
+    <header class="topbar">
+      <button class="icon-btn menu-btn" id="menu-btn" type="button" aria-label="Open menu" aria-controls="sidebar" aria-expanded="false">
+        <span data-icon="menu"></span>
+      </button>
+
+      <div class="topbar-titles">
+        <h1 class="page-title" id="page-title">Dashboard</h1>
+        <p class="page-description" id="page-description">Daily business overview.</p>
+      </div>
+
+      <div class="topbar-actions">
+        <div class="search-box">
+          <span class="search-icon" data-icon="search" aria-hidden="true"></span>
+          <input type="search" id="global-search" placeholder="Search (coming soon)" aria-label="Search (coming soon)" disabled>
+        </div>
+        <button class="icon-btn" type="button" aria-label="Notifications (coming soon)" disabled>
+          <span data-icon="bell"></span>
+        </button>
+        <button class="profile-btn" type="button" aria-label="Owner profile (placeholder)">
+          SA
+        </button>
+      </div>
+    </header>
+
+    <div class="conn-banner" id="conn-banner" hidden role="alert"></div>
+
+    <main id="main-content" tabindex="-1">
+
+      <!-- Dashboard placeholder -->
+      <section id="view-dashboard" class="view" aria-label="Dashboard">
+<div class="section-head">
+          <div>
+            <h2 class="section-title">Business overview</h2>
+            <p class="section-hint">Live figures from the cash ledger, bookings, and inventory. Refreshed each time you open the dashboard.</p>
+          </div>
+          <span class="section-meta" id="dash-generated"></span>
+        </div>
+
+        <div id="dash-error" hidden role="alert"></div>
+
+        <div class="kpi-grid">
+          <article class="card kpi-card">
+            <div class="kpi-label">Available Cash</div>
+            <div class="kpi-value" id="dash-money-cash">&#8369;0.00</div>
+            <div class="kpi-meta" id="dash-active-accounts">Active cash accounts</div>
+          </article>
+          <article class="card kpi-card">
+            <div class="kpi-label">Today's Cash In</div>
+            <div class="kpi-value" id="dash-cash-in">&#8369;0.00</div>
+            <div class="kpi-meta">Posted inflows on the ledger</div>
+          </article>
+          <article class="card kpi-card">
+            <div class="kpi-label">Today's Cash Out</div>
+            <div class="kpi-value" id="dash-cash-out">&#8369;0.00</div>
+            <div class="kpi-meta">Posted outflows on the ledger</div>
+          </article>
+          <article class="card kpi-card">
+            <div class="kpi-label">Net Cash Today</div>
+            <div class="kpi-value" id="dash-net-today">&#8369;0.00</div>
+            <div class="kpi-meta">In today minus out today</div>
+          </article>
+          <article class="card kpi-card">
+            <div class="kpi-label">Upcoming Events</div>
+            <div class="kpi-value" id="home-upcoming-events">-</div>
+            <div class="kpi-meta">Next 14 days (bookings)</div>
+          </article>
+        </div>
+
+        <div class="section-head mt-5">
+          <div>
+            <h2 class="section-title">Needs attention</h2>
+            <p class="section-hint">Alerts that require follow-up from the owner or operations team.</p>
+          </div>
+        </div>
+        <div class="kpi-grid">
+          <article class="card kpi-card">
+            <div class="kpi-label">Overdue Receivables</div>
+            <div class="kpi-value" id="dash-alert-overdue">0</div>
+            <div class="kpi-meta">Past-due bookings with balances</div>
+          </article>
+          <article class="card kpi-card">
+            <div class="kpi-label">Low Stock Items</div>
+            <div class="kpi-value" id="dash-alert-lowstock">0</div>
+            <div class="kpi-meta">At or below reorder level</div>
+          </article>
+          <article class="card kpi-card">
+            <div class="kpi-label">Unreconciled Deployments</div>
+            <div class="kpi-value" id="dash-alert-deploy">0</div>
+            <div class="kpi-meta">Not yet RECONCILED or CLOSED</div>
+          </article>
+        </div>
+
+        <div class="section-head mt-5">
+          <div>
+            <h2 class="section-title">Booking pulse</h2>
+            <p class="section-hint">Live booking, payment, and receivable figures.</p>
+          </div>
+        </div>
+        <div class="kpi-grid">
+          <article class="card kpi-card">
+            <div class="kpi-label">Confirmed Bookings</div>
+            <div class="kpi-value" id="home-confirmed-bookings">-</div>
+            <div class="kpi-meta">Status CONFIRMED</div>
+          </article>
+          <article class="card kpi-card">
+            <div class="kpi-label">Outstanding Receivables</div>
+            <div class="kpi-value" id="home-outstanding-receivables">-</div>
+            <div class="kpi-meta">Gross minus valid payments</div>
+          </article>
+          <article class="card kpi-card">
+            <div class="kpi-label">Payments This Month</div>
+            <div class="kpi-value" id="home-payments-month">-</div>
+            <div class="kpi-meta">Posted payments only</div>
+          </article>
+          <article class="card kpi-card">
+            <div class="kpi-label">Attention Items</div>
+            <div class="kpi-value" id="home-attention-items">0</div>
+            <div class="kpi-meta">Unpaid confirmed + overpayments + refund reviews</div>
+          </article>
+        </div>
+
+        <div class="section-head mt-5">
+          <div>
+            <h2 class="section-title">Customer pulse</h2>
+            <p class="section-hint">Live counts from the customer and package modules.</p>
+          </div>
+        </div>
+        <div class="kpi-grid">
+          <article class="card kpi-card">
+            <div class="kpi-label">Active Clients</div>
+            <div class="kpi-value" id="home-active-clients">-</div>
+            <div class="kpi-meta">Non-archived client records</div>
+          </article>
+          <article class="card kpi-card">
+            <div class="kpi-label">Open Leads</div>
+            <div class="kpi-value" id="home-open-leads">-</div>
+            <div class="kpi-meta">Active pipeline statuses</div>
+          </article>
+          <article class="card kpi-card">
+            <div class="kpi-label">Follow-Ups Due</div>
+            <div class="kpi-value" id="home-followups-due">-</div>
+            <div class="kpi-meta">Leads with due follow-up</div>
+          </article>
+          <article class="card kpi-card">
+            <div class="kpi-label">Active Packages</div>
+            <div class="kpi-value" id="home-active-packages">-</div>
+            <div class="kpi-meta">Sellable catalog items</div>
+          </article>
+        </div>
+
+<div class="dash-grid">
+          <article class="card">
+            <div class="card-head">
+              <h3 class="card-title">Cashflow trend</h3>
+              <span class="badge badge-info" id="dash-trend-badge">30 days</span>
+            </div>
+            <div id="chart-cash" class="chart-region"></div>
+          </article>
+          <article class="card">
+            <div class="card-head">
+              <h3 class="card-title">Revenue vs direct costs</h3>
+              <span class="badge badge-info">3 months</span>
+            </div>
+            <div id="chart-revenue" class="chart-region"></div>
+          </article>
+          <article class="card">
+            <div class="card-head">
+              <h3 class="card-title">Top packages</h3>
+              <span class="badge badge-info">90 days</span>
+            </div>
+            <div id="chart-packages" class="chart-region"></div>
+          </article>
+        </div>
+      </section>
+
+      <!-- Dynamic module placeholder pages render here -->
+      <section id="view-page" class="view" hidden aria-label="Module page"></section>
+
+    </main>
+  </div>
+</div>
+
+<div id="toast-region" class="toast-region" aria-live="polite"></div>
+<div id="modal-region"></div>
+

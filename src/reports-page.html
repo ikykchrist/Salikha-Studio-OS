@@ -1,0 +1,61 @@
+<!-- reports-page.html
+     Reports workspace (Sprint 7): report picker, date filters,
+     generated table, and CSV export. -->
+
+<section id="view-reports" class="view" aria-label="Reports">
+
+  <div class="reports-layout">
+
+    <div class="reports-sidebar card">
+      <div class="card-head">
+        <h3 class="card-title">Reports</h3>
+      </div>
+      <div id="reports-list" class="reports-list">
+        <div class="report-group-label">Loading&hellip;</div>
+      </div>
+    </div>
+
+    <div class="reports-main">
+
+      <div class="card">
+        <div class="section-head">
+          <div>
+            <h2 class="section-title" id="report-title">Select a report</h2>
+            <p class="section-hint" id="report-description">Choose a report from the list; results are computed live from the workbook.</p>
+          </div>
+        </div>
+
+        <div class="form-row filter-bar" id="report-filters" hidden>
+          <div class="field filter-field">
+            <label class="field-label" for="report-from">From</label>
+            <input class="field-input" type="date" id="report-from">
+          </div>
+          <div class="field filter-field">
+            <label class="field-label" for="report-to">To</label>
+            <input class="field-input" type="date" id="report-to">
+          </div>
+          <div class="field filter-field filter-actions">
+            <label class="field-label">&nbsp;</label>
+            <div class="btn-group">
+              <button class="btn btn-primary" type="button" id="report-run">Run report</button>
+              <button class="btn btn-secondary" type="button" id="report-export" disabled>Export CSV</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mt-4">
+        <div id="report-meta" class="report-meta" hidden></div>
+        <div id="report-table" class="report-table"></div>
+        <div id="report-empty" class="report-empty" hidden>
+          <span class="empty-icon" data-icon="reports" aria-hidden="true"></span>
+          <p class="empty-title">No report selected</p>
+          <p class="empty-hint">Pick a report on the left to generate it.</p>
+        </div>
+        <div id="report-error" class="report-error" hidden role="alert"></div>
+      </div>
+
+    </div>
+  </div>
+
+</section>

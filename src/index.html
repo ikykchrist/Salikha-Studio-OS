@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<!-- index.html
+     Main HTML document. Loads the app shell, reusable components, and
+     application scripts. The title is set server-side by Code.gs. -->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Salikha Studio OS - business operating system for Salikha Studio.">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Salikha Studio OS</title>
+  <?!= include('styles'); ?>
+</head>
+<body data-initial-route="<?= initialRoute ?>">
+  <a class="skip-link" href="#main-content">Skip to content</a>
+  <?!= include('app-shell'); ?>
+  <?!= include('components'); ?>
+  <?!= include('finance-page'); ?>
+  <?!= include('settings-page'); ?>
+  <?!= include('clients-page'); ?>
+  <?!= include('leads-page'); ?>
+  <?!= include('packages-page'); ?>
+  <?!= include('bookings-page'); ?>
+  <?!= include('booking-detail'); ?>
+  <?!= include('calendar-page'); ?>
+  <?!= include('payments-page'); ?>
+  <?!= include('expenses-page'); ?>
+  <?!= include('production-page'); ?>
+  <?!= include('deployments-page'); ?>
+  <?!= include('reports-page'); ?>
+  <?!= include('purchasing-page'); ?>
+  <?!= include('setup-page'); ?>
+  <?!= include('scripts'); ?>
+  <?!= include('finance-components'); ?>
+  <?!= include('finance-scripts'); ?>
+  <?!= include('settings-scripts'); ?>
+  <?!= include('customer-components'); ?>
+  <?!= include('customer-scripts'); ?>
+  <?!= include('package-components'); ?>
+  <?!= include('package-scripts'); ?>
+  <?!= include('booking-components'); ?>
+  <?!= include('booking-scripts'); ?>
+  <?!= include('payment-scripts'); ?>
+  <?!= include('expenses-scripts'); ?>
+  <?!= include('operations-scripts'); ?>
+  <?!= include('reports-scripts'); ?>
+  <?!= include('purchasing-components'); ?>
+  <?!= include('purchasing-scripts'); ?>
+  <?!= include('dashboard-scripts'); ?>
+  <?!= include('setup-scripts'); ?>
+</body>
+</html>

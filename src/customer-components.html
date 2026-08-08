@@ -1,0 +1,238 @@
+<!-- customer-components.html
+     Clients and Leads UI templates (Sprint 2). All dynamic values
+     escaped. Exposed as window.CUST_UI. -->
+
+<script>
+(function () {
+  'use strict';
+
+  function esc(value) {
+    return UI.escapeHtml(value);
+  }
+
+  function money(value) {
+    return '\u20B1' + Number(value || 0).toFixed(2);
+  }
+
+  var CLIENT_TYPES = ['INDIVIDUAL', 'BUSINESS', 'ORGANIZATION', 'SCHOOL', 'GOVERNMENT', 'OTHER'];
+  var CLIENT_STATUSES = ['ACTIVE', 'INACTIVE', 'BLOCKED', 'ARCHIVED'];
+  var CHANNELS = ['FACEBOOK', 'MESSENGER', 'PHONE', 'SMS', 'EMAIL', 'INSTAGRAM', 'OTHER'];
+  var SOURCES = ['FACEBOOK', 'INSTAGRAM', 'REFERRAL', 'TIE_UP_PARTNER', 'WALK_IN', 'RETURNING_CLIENT', 'SCHOOL', 'EVENT', 'OTHER'];
+  var NOTE_TYPES = ['GENERAL', 'PREFERENCE', 'PAYMENT_BEHAVIOR', 'EVENT_REQUIREMENT', 'FOLLOW_UP', 'WARNING', 'OTHER'];
+  var INTERACTION_TYPES = ['INQUIRY', 'FOLLOW_UP', 'CALL', 'MESSAGE', 'EMAIL', 'MEETING', 'QUOTE_DISCUSSION', 'COMPLAINT', 'FEEDBACK', 'OTHER'];
+  var INTERACTION_CHANNELS = ['FACEBOOK', 'MESSENGER', 'PHONE', 'SMS', 'EMAIL', 'INSTAGRAM', 'IN_PERSON', 'OTHER'];
+
+  var LEAD_STATUSES = ['NEW', 'CONTACTED', 'QUALIFIED', 'QUOTED', 'FOLLOW_UP', 'NEGOTIATING', 'WON', 'LOST', 'ARCHIVED'];
+  var PRIORITIES = ['LOW', 'NORMAL', 'HIGH', 'URGENT'];
+  var EVENT_TYPES = ['WEDDING', 'DEBUT', 'BIRTHDAY', 'CORPORATE', 'SCHOOL_EVENT', 'OTHER'];
+
+  function options(values, selected) {
+    var html = '';
+    for (var i = 0; i < values.length; i++) {
+      var sel = selected === values[i] ? ' selected' : '';
+      html += '<option value="' + esc(values[i]) + '"' + sel + '>' + esc(titleCase(values[i])) + '</option>';
+    }
+    return html;
+  }
+
+  function titleCase(value) {
+    return String(value || '').toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+  }
+
+  function field(label, inputHtml, hint) {
+    return '<div class="field"><label class="field-label">' + esc(label) + '</label>' + inputHtml +
+      (hint ? '<span class="field-hint">' + esc(hint) + '</span>' : '') + '</div>';
+  }
+
+  function statusBadge(value, kind) {
+    var map = {
+      ACTIVE: ['success', 'Active'],
+      INACTIVE: ['neutral', 'Inactive'],
+      BLOCKED: ['danger', 'Blocked'],
+      ARCHIVED: ['neutral', 'Archived'],
+      NEW: ['info', 'New'],
+      CONTACTED: ['info', 'Contacted'],
+      QUALIFIED: ['info', 'Qualified'],
+      QUOTED: ['info', 'Quoted'],
+      FOLLOW_UP: ['warning', 'Follow-Up'],
+      NEGOTIATING: ['warning', 'Negotiating'],
+      WON: ['success', 'Won'],
+      LOST: ['danger', 'Lost'],
+      LOW: ['neutral', 'Low'],
+      NORMAL: ['info', 'Normal'],
+      HIGH: ['warning', 'High'],
+      URGENT: ['danger', 'Urgent']
+    };
+    var meta = map[value] || ['neutral', value];
+    return UI.badge(meta[1], meta[0]);
+  }
+
+  function clientRow(client) {
+    var name = client.fullName || client.businessOrOrganization || 'Unnamed';
+    var sub = client.businessOrOrganization && client.fullName ? client.businessOrOrganization : '';
+    var contact = client.contactNumber || client.email || 'No contact';
+    return '<tr>' +
+      '<td><div class="cell-main">' + esc(name) + '</div>' + (sub ? '<div class="cell-sub">' + esc(sub) + '</div>' : '') + '</td>' +
+      '<td>' + esc(contact) + '</td>' +
+      '<td>' + esc(titleCase(client.sourceChannel || 'OTHER')) + '</td>' +
+      '<td>' + esc(titleCase(client.preferredContactChannel || 'OTHER')) + '</td>' +
+      '<td>' + esc(client.lastContactedAt || '-') + '</td>' +
+      '<td>' + statusBadge(client.clientStatus) + '</td>' +
+      '<td><div class="row-actions">' +
+      '<button class="btn btn-ghost btn-sm" type="button" data-client-view="' + esc(client.clientId) + '">View</button>' +
+      '<button class="btn btn-ghost btn-sm" type="button" data-client-menu="' + esc(client.clientId) + '" aria-label="More actions">\u22EE</button>' +
+      '</div></td>' +
+      '</tr>';
+  }
+
+  function leadRow(lead) {
+    var name = lead.leadName || lead.businessOrOrganization || 'Unnamed';
+    var sub = lead.businessOrOrganization && lead.leadName ? lead.businessOrOrganization : '';
+    return '<tr>' +
+      '<td><div class="cell-main">' + esc(name) + '</div>' + (sub ? '<div class="cell-sub">' + esc(sub) + '</div>' : '') + '</td>' +
+      '<td>' + esc(lead.serviceInterest || '-') + '</td>' +
+      '<td>' + esc(lead.eventDateInterest || '-') + '</td>' +
+      '<td>' + esc(titleCase(lead.sourceChannel || 'OTHER')) + '</td>' +
+      '<td class="num">' + (lead.estimatedBudget ? money(lead.estimatedBudget) : '-') + '</td>' +
+      '<td>' + esc(lead.nextFollowUpDate || '-') + '</td>' +
+      '<td>' + statusBadge(lead.leadStatus) + '</td>' +
+      '<td>' + statusBadge(lead.priority, 'priority') + '</td>' +
+      '<td><div class="row-actions">' +
+      '<button class="btn btn-ghost btn-sm" type="button" data-lead-view="' + esc(lead.leadId) + '">View</button>' +
+      '<button class="btn btn-ghost btn-sm" type="button" data-lead-menu="' + esc(lead.leadId) + '" aria-label="More actions">\u22EE</button>' +
+      '</div></td>' +
+      '</tr>';
+  }
+
+  function clientFormTpl(client) {
+    client = client || {};
+    return '<form id="client-form" class="finance-form" novalidate>' +
+      '<h4 class="form-section-title">Identity</h4>' +
+      field('Client type', '<select class="field-select" id="cf-type">' + options(CLIENT_TYPES, client.clientType || 'INDIVIDUAL') + '</select>') +
+      field('Full name', '<input class="field-input" type="text" id="cf-fullname" maxlength="150" value="' + esc(client.fullName || '') + '">') +
+      '<div class="form-row">' +
+      field('First name', '<input class="field-input" type="text" id="cf-first" maxlength="100" value="' + esc(client.firstName || '') + '">') +
+      field('Last name', '<input class="field-input" type="text" id="cf-last" maxlength="100" value="' + esc(client.lastName || '') + '">') +
+      '</div>' +
+      field('Business or organization', '<input class="field-input" type="text" id="cf-business" maxlength="150" value="' + esc(client.businessOrOrganization || '') + '">') +
+      '<h4 class="form-section-title">Contact</h4>' +
+      '<div class="form-row">' +
+      field('Contact number', '<input class="field-input" type="tel" id="cf-phone" maxlength="20" value="' + esc(client.contactNumber || '') + '">') +
+      field('Alternate contact number', '<input class="field-input" type="tel" id="cf-phone2" maxlength="20" value="' + esc(client.alternateContactNumber || '') + '">') +
+      '</div>' +
+      field('Email', '<input class="field-input" type="email" id="cf-email" maxlength="150" value="' + esc(client.email || '') + '">') +
+      '<div class="form-row">' +
+      field('Facebook profile URL', '<input class="field-input" type="url" id="cf-fb" maxlength="200" value="' + esc(client.facebookProfileUrl || '') + '">') +
+      field('Instagram profile URL', '<input class="field-input" type="url" id="cf-ig" maxlength="200" value="' + esc(client.instagramProfileUrl || '') + '">') +
+      '</div>' +
+      '<h4 class="form-section-title">Details</h4>' +
+      field('Address line', '<input class="field-input" type="text" id="cf-address" maxlength="200" value="' + esc(client.addressLine || '') + '">') +
+      '<div class="form-row">' +
+      field('City / municipality', '<input class="field-input" type="text" id="cf-city" maxlength="100" value="' + esc(client.cityMunicipality || '') + '">') +
+      field('Province', '<input class="field-input" type="text" id="cf-province" maxlength="100" value="' + esc(client.province || '') + '">') +
+      '</div>' +
+      '<div class="form-row">' +
+      field('Preferred contact channel', '<select class="field-select" id="cf-channel">' + options(CHANNELS, client.preferredContactChannel || 'OTHER') + '</select>') +
+      field('Source channel', '<select class="field-select" id="cf-source">' + options(SOURCES, client.sourceChannel || 'OTHER') + '</select>') +
+      '</div>' +
+      field('Notes', '<textarea class="field-textarea" id="cf-notes" maxlength="2000">' + esc(client.notesSummary || '') + '</textarea>') +
+      '<div class="field-error" id="cf-error" hidden></div>' +
+      '<div id="cf-duplicates" hidden></div>' +
+      '</form>';
+  }
+
+  function duplicateWarning(matches, isStrong) {
+    var tone = isStrong ? 'alert-danger' : 'alert-warning';
+    var heading = isStrong ? 'A client with the same contact details already exists.' : 'Possible duplicate clients found.';
+    var html = '<div class="alert ' + tone + ' mt-2"><strong>' + esc(heading) + '</strong><ul class="dup-list">';
+    for (var i = 0; i < matches.length; i++) {
+      html += '<li>' + esc(matches[i].clientName || 'Unnamed') + ' - matched on ' + esc(matches[i].matchedOn) + '</li>';
+    }
+    html += '</ul></div>';
+    return html;
+  }
+
+  function leadFormTpl(lead) {
+    lead = lead || {};
+    return '<form id="lead-form" class="finance-form" novalidate>' +
+      '<h4 class="form-section-title">Identity</h4>' +
+      '<div class="form-row">' +
+      field('Lead name', '<input class="field-input" type="text" id="lf-name" maxlength="150" value="' + esc(lead.leadName || '') + '">') +
+      field('Business or organization', '<input class="field-input" type="text" id="lf-business" maxlength="150" value="' + esc(lead.businessOrOrganization || '') + '">') +
+      '</div>' +
+      field('Contact number', '<input class="field-input" type="tel" id="lf-phone" maxlength="20" value="' + esc(lead.contactNumber || '') + '">') +
+      '<div class="form-row">' +
+      field('Email', '<input class="field-input" type="email" id="lf-email" maxlength="150" value="' + esc(lead.email || '') + '">') +
+      field('Facebook profile URL', '<input class="field-input" type="url" id="lf-fb" maxlength="200" value="' + esc(lead.facebookProfileUrl || '') + '">') +
+      '</div>' +
+      '<div class="form-row">' +
+      field('Instagram profile URL', '<input class="field-input" type="url" id="lf-ig" maxlength="200" value="' + esc(lead.instagramProfileUrl || '') + '">') +
+      field('Priority', '<select class="field-select" id="lf-priority">' + options(PRIORITIES, lead.priority || 'NORMAL') + '</select>') +
+      '</div>' +
+      '<h4 class="form-section-title">Event interest (optional)</h4>' +
+      '<div class="form-row">' +
+      field('Service interest', '<input class="field-input" type="text" id="lf-service" maxlength="150" value="' + esc(lead.serviceInterest || '') + '">') +
+      field('Event type', '<select class="field-select" id="lf-eventtype"><option value="">Not specified</option>' + options(EVENT_TYPES, lead.eventType || '') + '</select>') +
+      '</div>' +
+      '<div class="form-row">' +
+      field('Possible event date', '<input class="field-input" type="date" id="lf-eventdate" value="' + esc(lead.eventDateInterest || '') + '">') +
+      field('Venue or location', '<input class="field-input" type="text" id="lf-venue" maxlength="200" value="' + esc(lead.venueOrLocation || '') + '">') +
+      '</div>' +
+      '<div class="form-row">' +
+      field('Estimated budget', '<input class="field-input num-input" type="number" min="0" step="0.01" id="lf-budget" value="' + esc(lead.estimatedBudget || '') + '">') +
+      field('Source channel', '<select class="field-select" id="lf-source">' + options(SOURCES, lead.sourceChannel || 'OTHER') + '</select>') +
+      '</div>' +
+      '<div class="form-row">' +
+      field('Referred by', '<input class="field-input" type="text" id="lf-referred" maxlength="100" value="' + esc(lead.referredBy || '') + '">') +
+      field('Next follow-up date', '<input class="field-input" type="date" id="lf-followup" value="' + esc(lead.nextFollowUpDate || '') + '">') +
+      '</div>' +
+      field('Notes', '<textarea class="field-textarea" id="lf-notes" maxlength="2000">' + esc(lead.notesSummary || '') + '</textarea>') +
+      '<div class="field-error" id="lf-error" hidden></div>' +
+      '</form>';
+  }
+
+  function noteItem(note) {
+    var tone = note.noteType === 'WARNING' ? 'note-warning' : (note.isPinned ? 'note-pinned' : '');
+    return '<div class="note-item ' + tone + '">' +
+      '<div class="note-head"><span class="badge ' + (note.noteType === 'WARNING' ? 'badge-danger' : note.isPinned ? 'badge-info' : 'badge-neutral') + '">' + esc(note.noteType || 'GENERAL') + '</span>' +
+      '<span class="note-meta">' + esc(note.createdAt || '') + '</span></div>' +
+      '<p class="note-text">' + esc(note.noteText) + '</p>' +
+      '</div>';
+  }
+
+  function interactionItem(interaction) {
+    return '<div class="interaction-item">' +
+      '<div class="note-head"><span class="badge badge-neutral">' + esc(interaction.interactionType || 'OTHER') + '</span>' +
+      '<span class="note-meta">' + esc(interaction.interactionDate || '') + ' - ' + esc(interaction.channel || 'OTHER') + '</span></div>' +
+      '<p class="note-text">' + esc(interaction.summary) + '</p>' +
+      (interaction.outcome ? '<p class="note-meta">Outcome: ' + esc(interaction.outcome) + '</p>' : '') +
+      (interaction.nextFollowUpDate ? '<p class="note-meta">Next follow-up: ' + esc(interaction.nextFollowUpDate) + '</p>' : '') +
+      '</div>';
+  }
+
+  window.CUST_UI = {
+    esc: esc,
+    money: money,
+    options: options,
+    titleCase: titleCase,
+    statusBadge: statusBadge,
+    clientRow: clientRow,
+    leadRow: leadRow,
+    clientFormTpl: clientFormTpl,
+    leadFormTpl: leadFormTpl,
+    duplicateWarning: duplicateWarning,
+    noteItem: noteItem,
+    interactionItem: interactionItem,
+    CLIENT_TYPES: CLIENT_TYPES,
+    CLIENT_STATUSES: CLIENT_STATUSES,
+    CHANNELS: CHANNELS,
+    SOURCES: SOURCES,
+    NOTE_TYPES: NOTE_TYPES,
+    INTERACTION_TYPES: INTERACTION_TYPES,
+    INTERACTION_CHANNELS: INTERACTION_CHANNELS,
+    LEAD_STATUSES: LEAD_STATUSES,
+    PRIORITIES: PRIORITIES,
+    EVENT_TYPES: EVENT_TYPES
+  };
+})();
+</script>

@@ -1,0 +1,95 @@
+<!-- expenses-page.html
+     Expenses page markup (Sprint 4). Hidden until the expenses route is
+     active; the shell shows/hides this section. Only a PAID expense
+     moves cash, so every summary figure here uses netAmount
+     (gross - tax) and status counts - never a ledger balance. -->
+
+<section id="view-expenses" class="view" hidden aria-label="Expenses">
+  <div class="section-head">
+    <div>
+      <h2 class="section-title">Expenses</h2>
+      <p class="section-hint">Capture, approve, and pay expenses. Only a PAID expense moves cash on the ledger - approval never does.</p>
+    </div>
+    <div class="section-actions">
+      <button class="btn btn-primary" type="button" data-expense-action="new">New Expense</button>
+    </div>
+  </div>
+
+  <div class="finance-status" id="expenses-status" hidden></div>
+
+  <div class="kpi-grid" id="expenses-summary-cards">
+    <article class="card kpi-card">
+      <div class="kpi-label">Drafts</div>
+      <div class="kpi-value" id="kpi-exp-drafts">0</div>
+      <div class="kpi-meta" id="kpi-exp-drafts-meta">&mdash;</div>
+    </article>
+    <article class="card kpi-card">
+      <div class="kpi-label">For Approval</div>
+      <div class="kpi-value" id="kpi-exp-approval">0</div>
+      <div class="kpi-meta">Submitted, awaiting approval.</div>
+    </article>
+    <article class="card kpi-card">
+      <div class="kpi-label">Approved to Pay</div>
+      <div class="kpi-value" id="kpi-exp-approved">&#8369;0.00</div>
+      <div class="kpi-meta" id="kpi-exp-approved-meta">0 expense(s) net of tax.</div>
+    </article>
+    <article class="card kpi-card">
+      <div class="kpi-label">Paid (net)</div>
+      <div class="kpi-value" id="kpi-exp-paid">&#8369;0.00</div>
+      <div class="kpi-meta">Posted EXPENSE cash outflows.</div>
+    </article>
+    <article class="card kpi-card">
+      <div class="kpi-label">Direct Costs (net)</div>
+      <div class="kpi-value" id="kpi-exp-direct">&#8369;0.00</div>
+      <div class="kpi-meta" id="kpi-exp-direct-meta">Tagged to bookings.</div>
+    </article>
+  </div>
+
+  <div class="card mt-4">
+    <div class="card-head">
+      <h3 class="card-title">Expense register</h3>
+      <span class="badge badge-neutral" id="expenses-count">Loading&hellip;</span>
+    </div>
+
+    <div class="filter-row" id="expenses-filters">
+      <select class="field-select" id="exp-filter-status" aria-label="Filter by status">
+        <option value="">All statuses</option>
+        <option value="DRAFT">Draft</option>
+        <option value="SUBMITTED">For approval</option>
+        <option value="APPROVED">Approved</option>
+        <option value="REJECTED">Rejected</option>
+        <option value="PAID">Paid</option>
+      </select>
+      <select class="field-select" id="exp-filter-type" aria-label="Filter by cost type">
+        <option value="">All cost types</option>
+        <option value="DIRECT">Direct</option>
+        <option value="OPERATING">Operating</option>
+        <option value="CAPITAL">Capital</option>
+        <option value="OTHER">Other</option>
+      </select>
+      <input class="field-input" type="search" id="exp-filter-search" placeholder="Search description, supplier&hellip;" aria-label="Search expenses">
+      <input class="field-input" type="date" id="exp-filter-from" aria-label="From date">
+      <input class="field-input" type="date" id="exp-filter-to" aria-label="To date">
+      <button class="btn btn-ghost" type="button" data-expense-action="clear-filters">Reset</button>
+    </div>
+
+    <div class="table-wrap">
+      <table class="data-table" id="expenses-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Description</th>
+            <th>Cost type</th>
+            <th>Booking</th>
+            <th class="num">Net amount</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="expenses-body"><!-- rendered --></tbody>
+      </table>
+    </div>
+
+    <div class="pagination-row" id="expenses-pagination"><!-- rendered --></div>
+  </div>
+</section>

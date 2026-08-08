@@ -1,0 +1,268 @@
+<!-- settings-scripts.html
+     Settings page controller: Google integration status cards,
+     Check Connections, and the setup-instructions modal. -->
+
+<script>
+(function () {
+  'use strict';
+
+  function el(id) {
+    return document.getElementById(id);
+  }
+
+  function section() {
+    return el('view-settings');
+  }
+
+  function callServer(fnName, onOk) {
+    google.script.run
+      .withSuccessHandler(function (response) {
+        if (response && response.success) {
+          if (onOk) {
+            onOk(response.data);
+          }
+        } else {
+          APP.toast(toastMessageFromResponse(response, 'settings'), 'error');
+        }
+      })
+      .withFailureHandler(function (err) {
+        APP.toast(toastMessageFromResponse(err, 'settings', true), 'error');
+      })[fnName]();
+  }
+
+  function callServerWithArgs(fnName, args, onOk) {
+    google.script.run
+      .withSuccessHandler(function (response) {
+        if (response && response.success) {
+          if (onOk) {
+            onOk(response.data);
+          }
+        } else {
+          APP.toast(toastMessageFromResponse(response, 'settings'), 'error');
+        }
+      })
+      .withFailureHandler(function (err) {
+        APP.toast(toastMessageFromResponse(err, 'settings', true), 'error');
+      })[fnName](args);
+  }
+
+  function loadAllocationSetting() {
+    var toggle = el('settings-alloc-toggle');
+    var label = el('settings-alloc-label');
+    if (!toggle) {
+      return;
+    }
+    toggle.disabled = true;
+    callServer('getAllocateOperatingCosts', function (settings) {
+      var enabled = !!settings.allocateOperatingCosts;
+      toggle.checked = enabled;
+      toggle.disabled = false;
+      if (label) {
+        label.textContent = enabled ? 'Operating cost allocation is ON.' : 'Operating cost allocation is OFF (net profit = gross profit).';
+      }
+    });
+  }
+
+  function onAllocationToggle() {
+    var toggle = el('settings-alloc-toggle');
+    toggle.disabled = true;
+    callServerWithArgs('setAllocateOperatingCosts', { enabled: toggle.checked }, function (result) {
+      toggle.disabled = false;
+      APP.toast(result.changed
+        ? 'Operating cost allocation ' + (result.value ? 'enabled' : 'disabled') + '. ' +
+          (result.refreshedBookings ? result.refreshedBookings + ' booking(s) recalculated.' : '')
+        : 'Operating cost allocation is already set to ' + (result.value ? 'ON' : 'OFF') + '.', 'success');
+      var label = el('settings-alloc-label');
+      if (label) {
+        label.textContent = result.value ? 'Operating cost allocation is ON.' : 'Operating cost allocation is OFF (net profit = gross profit).';
+      }
+    });
+  }
+
+  function setStatus(message, tone) {
+    var status = el('settings-status');
+    if (!status) {
+      return;
+    }
+    if (message) {
+      status.innerHTML = FIN_UI.initStateBanner({ message: message, tone: tone || 'alert-info' });
+      status.hidden = false;
+    } else {
+      status.hidden = true;
+      status.innerHTML = '';
+    }
+  }
+
+  function badgeFor(status) {
+    switch (status) {
+      case 'CONNECTED': return UI.badge('Connected', 'success');
+      case 'CONNECTED_BUT_NOT_INITIALIZED':
+      case 'NEEDS_INITIALIZATION': return UI.badge('Needs Initialization', 'warning');
+      case 'NOT_CONFIGURED': return UI.badge('Not Configured', 'warning');
+      case 'NOT_FOUND': return UI.badge('Not Found', 'danger');
+      case 'ACCESS_DENIED': return UI.badge('Access Denied', 'danger');
+      case 'ERROR':
+      case 'INTEGRATION_CONNECTION_ERROR': return UI.badge('Connection Error', 'danger');
+      default: return UI.badge('Checking', 'info');
+    }
+  }
+
+  function detailLine(status) {
+    switch (status) {
+      case 'CONNECTED': return 'Connected';
+      case 'CONNECTED_BUT_NOT_INITIALIZED': return 'Connected - database schema needs initialization';
+      case 'NEEDS_INITIALIZATION': return 'Connected - Sprint 1 sheets are missing';
+      case 'NOT_CONFIGURED': return 'Not configured';
+      case 'NOT_FOUND': return 'Resource not found';
+      case 'ACCESS_DENIED': return 'Access denied';
+      case 'ERROR':
+      case 'INTEGRATION_CONNECTION_ERROR': return 'Connection error';
+      default: return 'Checking';
+    }
+  }
+
+  function renderCards(data) {
+    renderCard('settings-db-badge', 'settings-db-detail', data.spreadsheet);
+    renderCard('settings-drive-badge', 'settings-drive-detail', data.drive);
+    renderCard('settings-calendar-badge', 'settings-calendar-detail', data.calendar);
+  }
+
+  function renderCard(badgeId, detailId, resource) {
+    var badge = el(badgeId);
+    var detail = el(detailId);
+    if (!badge || !detail) {
+      return;
+    }
+    badge.innerHTML = badgeFor(resource.status);
+    var parts = [];
+    parts.push(detailLine(resource.status));
+    if (resource.resourceName) {
+      parts.push('Resource: ' + resource.resourceName);
+    }
+    if (resource.status === 'CONNECTED' && resource.resourceType === 'CALENDAR' && resource.timezone) {
+      parts.push('Timezone: ' + resource.timezone + (resource.timezoneReady ? '' : ' (mismatch)'));
+    }
+    if (resource.message) {
+      parts.push(resource.message);
+    }
+    detail.innerHTML = FIN_UI.esc(parts.join(' · '));
+    if (badgeId === 'settings-db-badge') {
+      renderDatabaseActions(resource.status);
+    }
+  }
+
+  function renderDatabaseActions(status) {
+    var actions = el('settings-db-actions');
+    if (!actions) {
+      return;
+    }
+    var needsInit = status === 'CONNECTED_BUT_NOT_INITIALIZED' || status === 'NEEDS_INITIALIZATION';
+    if (!needsInit) {
+      actions.hidden = true;
+      actions.innerHTML = '';
+      return;
+    }
+    actions.innerHTML = '<button class="btn btn-primary mt-2" type="button" id="settings-init-db">Initialize database</button>';
+    actions.hidden = false;
+  }
+
+  function initDatabase() {
+    var button = el('settings-init-db');
+    if (!button || button.disabled) {
+      return;
+    }
+    button.disabled = true;
+    button.textContent = 'Initializing\u2026';
+    callServer('initializeDatabase', function (result) {
+      APP.toast('Database initialized (schema v' + result.schemaVersion + ').', 'success');
+      loadStatus();
+    });
+  }
+
+  function loadStatus() {
+    setStatus(null);
+    ['settings-db-badge', 'settings-drive-badge', 'settings-calendar-badge'].forEach(function (id) {
+      var badge = el(id);
+      if (badge) {
+        badge.innerHTML = UI.badge('Checking', 'info');
+      }
+    });
+    callServer('getIntegrationStatus', function (data) {
+      renderCards(data);
+      var overall = data.overallStatus;
+      if (overall === 'CONNECTED') {
+        setStatus('All Google integrations are connected.', 'alert-success');
+      } else if (overall === 'PARTIALLY_CONFIGURED') {
+        setStatus('Some Google integrations are not configured yet. Follow the setup instructions to complete them.', 'alert-warning');
+      } else if (overall === 'NOT_CONFIGURED') {
+        setStatus('Google integrations are not configured yet. Follow the setup instructions to complete them.', 'alert-warning');
+      } else {
+        setStatus('One or more integrations could not be verified. Check the cards below.', 'alert-danger');
+      }
+      var checked = el('settings-last-checked');
+      if (checked) {
+        checked.textContent = 'Last checked: ' + (data.lastChecked || '');
+      }
+    });
+  }
+
+  function openInstructionsModal() {
+    var body =
+      '<p class="section-hint">Configure IDs in Apps Script: Project Settings &gt; Script Properties. Values are read server-side only and are never shown in this app.</p>' +
+      '<h4 class="settings-modal-heading">Business Database</h4>' +
+      '<ol class="settings-steps"><li>Create a spreadsheet named Salikha Studio OS Database.</li>' +
+      '<li>Copy the spreadsheet ID from its URL (between /d/ and /edit).</li>' +
+      '<li>Add it as <code>SPREADSHEET_ID</code>.</li>' +
+      '<li>Return to this page and click <strong>Initialize database</strong> on the Business Database card.</li></ol>' +
+      '<h4 class="settings-modal-heading">File Storage</h4>' +
+      '<ol class="settings-steps"><li>Create a private folder named Salikha Studio OS Files.</li>' +
+      '<li>Copy the folder ID from its URL (after /folders/).</li>' +
+      '<li>Add it as <code>ROOT_DRIVE_FOLDER_ID</code>.</li></ol>' +
+      '<h4 class="settings-modal-heading">Business Calendar</h4>' +
+      '<ol class="settings-steps"><li>Create a calendar named Salikha Studio Events with timezone Asia/Manila.</li>' +
+      '<li>Copy its Calendar ID from calendar settings.</li>' +
+      '<li>Add it as <code>CALENDAR_ID</code>.</li></ol>' +
+      '<div class="alert alert-info mt-3">After adding properties, redeploy if needed, then run Check Connections.</div>';
+    APP.openModal(UI.modal('Setup instructions', body,
+      '<button class="btn btn-ghost" type="button" data-modal-close>Close</button>'));
+  }
+
+  function onSectionClick(event) {
+    var target = event.target;
+    var action = target.closest('[data-settings-action]');
+    if (!action) {
+      if (target.closest('#settings-init-db')) {
+        initDatabase();
+      }
+      return;
+    }
+    switch (action.getAttribute('data-settings-action')) {
+      case 'check': loadStatus(); break;
+      case 'instructions': openInstructionsModal(); break;
+    }
+  }
+
+  var activated = false;
+
+  function activate() {
+    if (!activated) {
+      activated = true;
+      section().addEventListener('click', onSectionClick);
+      var toggle = el('settings-alloc-toggle');
+      if (toggle) {
+        toggle.addEventListener('change', onAllocationToggle);
+      }
+      loadStatus();
+      loadAllocationSetting();
+    } else {
+      loadStatus();
+      loadAllocationSetting();
+    }
+  }
+
+  window.SETTINGS = {
+    activate: activate,
+    loadStatus: loadStatus
+  };
+})();
+</script>
