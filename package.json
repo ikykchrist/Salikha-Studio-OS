@@ -1,0 +1,30 @@
+{
+  "name": "salikha-studio-os",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "db:start": "docker compose -f docker-compose.local.yml up -d db",
+    "db:stop": "docker compose -f docker-compose.local.yml stop db",
+    "db:status": "docker compose -f docker-compose.local.yml ps db",
+    "db:seed": "docker compose -f docker-compose.local.yml exec -T db psql -U salikha -d salikha -v ON_ERROR_STOP=1 -f /docker-entrypoint-initdb.d/02-seed.sql",
+    "db:reset": "docker compose -f docker-compose.local.yml exec -T db psql -U salikha -d salikha -v ON_ERROR_STOP=1 -f /docker-entrypoint-initdb.d/01-schema.sql && npm run db:seed"
+  },
+  "dependencies": {
+    "lucide-react": "latest",
+    "next": "latest",
+    "pg": "^8.23.0",
+    "react": "latest",
+    "react-dom": "latest"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "@types/pg": "^8.23.1",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "typescript": "latest"
+  }
+}

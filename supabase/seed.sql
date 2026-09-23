@@ -1,0 +1,2 @@
+-- Local test seed entrypoint.
+-- Baseline cash accounts are versioned in migrations/012_seed_cash_accounts.sql.
