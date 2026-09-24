@@ -1,0 +1,4 @@
+import { getLocalPostgresPool } from "../../../../lib/local-postgres";
+import { createSession, publicUser, sessionCookie, verifyPassword } from "../../../../lib/auth";
+export const runtime="nodejs";
+export async function POST(request:Request){let b:Record<string,unknown>;try{b=await request.json()}catch{return Response.json({error:"Invalid request."},{status:400})}const login=String(b.login||"").trim().toLowerCase(),password=String(b.password||"");const r=await getLocalPostgresPool().query("select id,full_name,phone,email,facebook_url,username,role,profile_photo_data,password_hash from public.system_users where (lower(username)= $1 or lower(email)=$1) and is_active",[login]);const u=r.rows[0];if(!u||!await verifyPassword(password,u.password_hash))return Response.json({error:"Incorrect username/email or password."},{status:401});const token=await createSession(u.id);return Response.json({user:publicUser(u)},{headers:{"set-cookie":sessionCookie(token)}})}

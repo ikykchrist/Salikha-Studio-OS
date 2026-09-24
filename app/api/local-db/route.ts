@@ -1,10 +1,11 @@
 import { getLocalPostgresPool } from "../../../lib/local-postgres";
+import { requireUser } from "../../../lib/auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const tables = new Set([
-  "profiles", "clients", "service_packages", "bookings", "payments", "cash_accounts",
+  "profiles", "clients", "service_packages", "bookings", "payments", "cash_accounts", "cash_reconciliations",
   "cash_transactions", "expenses", "inventory_items", "inventory_movements", "equipment",
   "equipment_maintenance", "package_recipes", "package_addons", "booking_consumable_usage",
   "calendar_events", "audit_logs",
@@ -75,6 +76,8 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const auth = await requireUser(request);
+  if (auth.response) return auth.response;
   try {
     const body = await request.json() as RequestBody;
     const { table, operation } = body;

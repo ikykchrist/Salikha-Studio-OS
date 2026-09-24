@@ -1,9 +1,11 @@
 import { getLocalPostgresPool } from "../../../lib/local-postgres";
+import { requireUser } from "../../../lib/auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: Request) {
+  const auth = await requireUser(request); if (auth.response) return auth.response;
   try {
     const { rows } = await getLocalPostgresPool().query(
       `select p.id as "packageId", count(r.id)::int as "ingredientCount",

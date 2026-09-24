@@ -1,5 +1,6 @@
 import { getLocalPostgresPool } from "../../../lib/local-postgres";
 import type { PoolClient } from "pg";
+import { requireUser } from "../../../lib/auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,6 +28,7 @@ async function getRecipe(client: Pick<PoolClient, "query">, packageId: string) {
 }
 
 export async function GET(request: Request) {
+  const auth = await requireUser(request); if (auth.response) return auth.response;
   const packageId = new URL(request.url).searchParams.get("packageId");
   if (!packageId || !uuidPattern.test(packageId)) return Response.json({ error: "A valid packageId is required." }, { status: 400 });
 
@@ -45,6 +47,7 @@ export async function GET(request: Request) {
 }
 
 export async function PUT(request: Request) {
+  const auth = await requireUser(request); if (auth.response) return auth.response;
   let body: RecipeRequest;
   try {
     body = await request.json() as RecipeRequest;

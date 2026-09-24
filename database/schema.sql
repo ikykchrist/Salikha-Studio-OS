@@ -1,6 +1,9 @@
 -- Salikha Studio OS · local PostgreSQL schema reset
 -- This SQL is applied directly by the standalone local PostgreSQL container.
 
+drop table if exists public.google_calendar_connections cascade;
+drop table if exists public.system_sessions cascade;
+drop table if exists public.system_users cascade;
 drop table if exists public.booking_consumable_usage cascade;
 drop table if exists public.calendar_events cascade;
 drop table if exists public.package_addons cascade;
@@ -25,6 +28,21 @@ drop type if exists public.expense_status cascade;
 drop type if exists public.user_role cascade;
 
 create extension if not exists pgcrypto;
+
+create table public.system_users (
+  id uuid primary key default gen_random_uuid(), full_name text not null, phone text not null default '',
+  email text not null unique, facebook_url text not null default '', username text not null unique,
+  password_hash text not null, role text not null check (role in ('ADMIN','USER')),
+  profile_photo_data text, is_active boolean not null default true,
+  created_at timestamptz not null default now(), updated_at timestamptz not null default now()
+);
+create table public.system_sessions (
+  token_hash text primary key, user_id uuid not null references public.system_users(id) on delete cascade,
+  expires_at timestamptz not null, created_at timestamptz not null default now()
+);
+create index system_sessions_expiry_idx on public.system_sessions(expires_at);
+create unique index system_users_username_lower_unique_idx on public.system_users(lower(username));
+create unique index system_users_email_lower_unique_idx on public.system_users(lower(email));
 
 create type public.user_role as enum ('OWNER', 'ADMIN', 'FINANCE', 'OPERATIONS', 'CREW', 'VIEWER');
 create type public.booking_status as enum ('PENDING', 'CONFIRMED', 'DONE', 'CANCELLED', 'ARCHIVED');
@@ -60,6 +78,7 @@ create table public.service_packages (
   duration text,
   inclusions text,
   notes text,
+  calendar_color text not null default '#FDE2E4',
   base_price numeric(12,2) not null default 0 check (base_price >= 0),
   selling_price numeric(12,2) not null default 0 check (selling_price >= 0),
   is_active boolean not null default true,
@@ -76,7 +95,10 @@ create table public.bookings (
   start_time time,
   end_time time,
   venue text,
+  maps_url text,
   transport_amount numeric(12,2) not null default 0 check (transport_amount >= 0),
+  actual_transport_cost numeric(12,2) not null default 0 check (actual_transport_cost >= 0),
+  operator_salary numeric(12,2) not null default 0 check (operator_salary >= 0),
   addons_amount numeric(12,2) not null default 0 check (addons_amount >= 0),
   discount_amount numeric(12,2) not null default 0 check (discount_amount >= 0),
   downpayment_amount numeric(12,2) not null default 0 check (downpayment_amount >= 0),
@@ -133,6 +155,17 @@ create table public.cash_transactions (
   created_at timestamptz not null default now()
 );
 
+create table public.cash_reconciliations (
+  id uuid primary key default gen_random_uuid(),
+  account_id uuid not null references public.cash_accounts(id),
+  reconciled_date date not null,
+  actual_balance numeric(12,2) not null check (actual_balance >= 0),
+  system_balance numeric(12,2) not null,
+  difference numeric(12,2) not null,
+  notes text,
+  created_at timestamptz not null default now()
+);
+
 create table public.expenses (
   id uuid primary key default gen_random_uuid(),
   booking_id uuid references public.bookings(id),
@@ -183,6 +216,10 @@ create table public.equipment (
   serial_number text unique,
   status text not null default 'GREAT' check (status in ('GREAT', 'NEEDS_ATTENTION', 'FOR_FIXING', 'BROKEN')),
   condition text not null default 'Camera',
+  purchase_date date,
+  purchase_cost numeric(12,2) not null default 0 check (purchase_cost >= 0),
+  next_maintenance_date date,
+  last_cleaned_date date,
   notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -244,6 +281,18 @@ create table public.calendar_events (
   updated_at timestamptz not null default now()
 );
 
+create table public.google_calendar_connections (
+  id boolean primary key default true check (id),
+  account_email text not null,
+  calendar_id text not null default 'primary',
+  calendar_name text not null default 'Primary calendar',
+  encrypted_refresh_token text not null,
+  access_token text,
+  access_token_expires_at timestamptz,
+  connected_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table public.audit_logs (
   id uuid primary key default gen_random_uuid(),
   actor_id uuid,
@@ -258,6 +307,8 @@ create index bookings_event_date_idx on public.bookings(event_date);
 create index bookings_client_id_idx on public.bookings(client_id);
 create index payments_booking_id_idx on public.payments(booking_id);
 create index cash_transactions_account_date_idx on public.cash_transactions(account_id, transaction_date);
+create unique index cash_transactions_reference_unique_idx on public.cash_transactions(reference) where reference is not null;
+create index cash_reconciliations_account_date_idx on public.cash_reconciliations(account_id, reconciled_date desc);
 create index expenses_status_idx on public.expenses(status);
 create index inventory_movements_item_idx on public.inventory_movements(inventory_item_id, created_at);
 create index equipment_maintenance_date_idx on public.equipment_maintenance(scheduled_date);
@@ -283,6 +334,7 @@ alter table public.bookings enable row level security;
 alter table public.payments enable row level security;
 alter table public.cash_accounts enable row level security;
 alter table public.cash_transactions enable row level security;
+alter table public.cash_reconciliations enable row level security;
 alter table public.expenses enable row level security;
 alter table public.inventory_items enable row level security;
 alter table public.inventory_movements enable row level security;
@@ -308,6 +360,8 @@ create policy "active users read cash accounts" on public.cash_accounts for sele
 create policy "finance manage cash accounts" on public.cash_accounts for all using (public.has_role(array['OWNER','ADMIN','FINANCE']::public.user_role[]));
 create policy "active users read cash transactions" on public.cash_transactions for select using (public.is_active_user());
 create policy "finance manage cash transactions" on public.cash_transactions for all using (public.has_role(array['OWNER','ADMIN','FINANCE']::public.user_role[]));
+create policy "active users read cash reconciliations" on public.cash_reconciliations for select using (public.is_active_user());
+create policy "finance manage cash reconciliations" on public.cash_reconciliations for all using (public.has_role(array['OWNER','ADMIN','FINANCE']::public.user_role[]));
 create policy "active users read expenses" on public.expenses for select using (public.is_active_user());
 create policy "finance manage expenses" on public.expenses for all using (public.has_role(array['OWNER','ADMIN','FINANCE']::public.user_role[]));
 create policy "active users read inventory" on public.inventory_items for select using (public.is_active_user());

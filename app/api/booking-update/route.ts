@@ -1,5 +1,7 @@
 import { getLocalPostgresPool } from "../../../lib/local-postgres";
+import { requireUser } from "../../../lib/auth";
 import type { PoolClient } from "pg";
+import { googleCalendarConfigured, syncGoogleCalendar } from "../../../lib/google-calendar";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -8,9 +10,11 @@ const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}
 const moneyPattern = /^\d{1,10}(?:\.\d{1,2})?$/;
 
 export async function POST(request: Request) {
+  const auth = await requireUser(request);
+  if (auth.response) return auth.response;
   let body: Record<string, unknown>;
   try { body = await request.json(); } catch { return Response.json({ error: "Request body must be valid JSON." }, { status: 400 }); }
-  const { id, eventName, date, startTime, endTime, venue, packageName, total, downpaymentAmount, status } = body;
+  const { id, eventName, date, startTime, endTime, venue, mapsUrl, packageName, total, downpaymentAmount, status } = body;
   if (typeof id !== "string" || !uuidPattern.test(id)) return Response.json({ error: "A valid booking ID is required." }, { status: 400 });
   if (typeof eventName !== "string" || !eventName.trim() || typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return Response.json({ error: "Event name and date are required." }, { status: 400 });
   if (!moneyPattern.test(String(total ?? "")) || !moneyPattern.test(String(downpaymentAmount ?? ""))) return Response.json({ error: "Enter valid total and downpayment amounts." }, { status: 400 });
@@ -18,6 +22,7 @@ export async function POST(request: Request) {
   const downpayment = Number(downpaymentAmount);
   if (downpayment > totalValue) return Response.json({ error: "Downpayment cannot exceed the booking total." }, { status: 400 });
   if (status !== "PENDING" && status !== "DONE" && status !== "CANCELLED") return Response.json({ error: "Choose a valid booking status." }, { status: 400 });
+  if (mapsUrl != null && (typeof mapsUrl !== "string" || (mapsUrl !== "" && !/^https?:\/\//i.test(mapsUrl)))) return Response.json({ error: "Enter a valid http or https Google Maps URL." }, { status: 400 });
 
   const client: PoolClient = await getLocalPostgresPool().connect();
   try {
@@ -27,14 +32,14 @@ export async function POST(request: Request) {
     await client.query(
       `update public.bookings
           set event_name = $2, event_date = $3::date, start_time = nullif($4, '')::time,
-              end_time = nullif($5, '')::time, venue = nullif($6, ''),
+              end_time = nullif($5, '')::time, venue = nullif($6, ''), maps_url = nullif($10, ''),
               total_amount = $7::numeric(12,2), downpayment_amount = $8::numeric(12,2),
               paid_amount = case when $9::public.booking_status = 'DONE' then $7::numeric(12,2) else $8::numeric(12,2) end,
               status = $9::public.booking_status,
               cashflow_posted_at = case when $9::public.booking_status = 'DONE' then now() else null end,
               updated_at = now()
         where id = $1::uuid`,
-      [id, eventName.trim(), date, String(startTime || ""), String(endTime || ""), String(venue || ""), totalValue, downpayment, status],
+      [id, eventName.trim(), date, String(startTime || ""), String(endTime || ""), String(venue || ""), totalValue, downpayment, status, String(mapsUrl || "")],
     );
 
     const downRef = `booking-completion:${id}:downpayment`;
@@ -67,7 +72,12 @@ export async function POST(request: Request) {
 
     const saved = await client.query("select id, total_amount as total, paid_amount as \"paidAmount\", downpayment_amount as \"downpaymentAmount\", status from public.bookings where id = $1::uuid", [id]);
     await client.query("commit");
-    return Response.json({ booking: saved.rows[0] });
+    let calendarSync: unknown = null;
+    if (googleCalendarConfigured()) {
+      try { calendarSync = await syncGoogleCalendar(); }
+      catch (error) { calendarSync = { error: error instanceof Error ? error.message : "Calendar sync failed." }; }
+    }
+    return Response.json({ booking: saved.rows[0], calendarSync });
   } catch (error) {
     await client.query("rollback").catch(() => undefined);
     return Response.json({ error: error instanceof Error ? error.message : "Could not save the booking." }, { status: 500 });

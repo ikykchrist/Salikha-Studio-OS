@@ -9,34 +9,44 @@ export function MaintenanceActionForm({ equipmentId, equipmentName, onClose, onS
   const today = new Date().toISOString().slice(0, 10);
   const [actionType, setActionType] = useState("Maintenance");
   const [scheduledDate, setScheduledDate] = useState(today);
-  const [completedDate, setCompletedDate] = useState(today);
+  const [completedDate, setCompletedDate] = useState("");
   const [cost, setCost] = useState("0");
   const [vendor, setVendor] = useState("");
   const [notes, setNotes] = useState("");
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const submit = async () => {
     const record = {
       id: crypto.randomUUID(),
       scheduled_date: scheduledDate,
-      completed_date: completedDate,
+      completed_date: completedDate || null,
       action_type: actionType,
       cost: Number(cost) || 0,
       vendor,
       notes,
     };
-    const database = (await import("../lib/local-database")).getLocalDatabase();
-    if (database) {
-      await database.from("equipment_maintenance").insert({
+    setSaving(true);
+    setError("");
+    try {
+      const database = (await import("../lib/local-database")).getLocalDatabase();
+      if (!database) throw new Error("Local database is unavailable.");
+      const result = await database.from("equipment_maintenance").insert({
         equipment_id: equipmentId,
         scheduled_date: scheduledDate,
-        completed_date: completedDate,
+        completed_date: completedDate || null,
         action_type: actionType,
         cost: Number(cost) || 0,
         vendor,
         notes: notes || null,
-      });
+      }).select("id").single();
+      if (result.error || !result.data) throw new Error(result.error?.message || "Maintenance record was not saved.");
+      await onSave({ ...record, id: result.data.id });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Maintenance record was not saved.");
+    } finally {
+      setSaving(false);
     }
-    await onSave(record);
   };
 
   return (
@@ -48,6 +58,7 @@ export function MaintenanceActionForm({ equipmentId, equipmentName, onClose, onS
             <h2 id="maintenance-title">Add maintenance action</h2>
             <small>{equipmentName}</small>
           </div>
+          {error && <p className="form-warning" role="alert">{error}</p>}
           <button className="close-button" type="button" onClick={onClose} aria-label="Close maintenance form"><X aria-hidden="true" /></button>
         </div>
         <div className="calendar-setup-body">
@@ -70,7 +81,7 @@ export function MaintenanceActionForm({ equipmentId, equipmentName, onClose, onS
         </div>
         <div className="drawer-footer">
           <button className="secondary-button" type="button" onClick={onClose}>Cancel</button>
-          <button className="primary-button" type="button" onClick={submit}>Save maintenance</button>
+          <button className="primary-button" type="button" onClick={submit} disabled={saving}>{saving ? "Saving…" : "Save maintenance"}</button>
         </div>
       </div>
     </div>
