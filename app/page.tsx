@@ -5,6 +5,7 @@ import type { LucideIcon } from "lucide-react";
 import { AlertCircle, AlertTriangle, Archive, ArrowLeft, ArrowLeftRight, ArrowRight, Banknote, Bell, Boxes, CalendarDays, CalendarRange, Camera, ChartNoAxesCombined, Check, ChevronLeft, ChevronRight, CircleCheck, CircleDollarSign, ClipboardList, Clock3, Copy, Download, ExternalLink, FileBarChart, FileDown, History, LayoutDashboard, ListPlus, LogOut, Mail, MapPin, Menu, Minus, Moon, Pencil, Phone, Plus, Receipt, RefreshCw, RotateCcw, Search, Settings, ShieldCheck, Sparkles, SlidersHorizontal, Sun, TrendingDown, TrendingUp, Users, WalletCards, Wrench, X } from "lucide-react";
 import { getLocalDatabase } from "../lib/local-database";
 import { deleteRecord } from "../lib/delete-record";
+import { DialogHost, showConfirm, showNotice } from "../lib/ui-dialogs";
 import { PackageDetailActions } from "./package-detail-actions";
 import { PackageEditForm } from "./package-edit-form";
 import { DEFAULT_PACKAGE_CALENDAR_COLOR, PACKAGE_CALENDAR_COLORS } from "../lib/package-calendar-colors";
@@ -147,6 +148,7 @@ export default function Home() {
 
   return (
     <div className="app-shell">
+      <DialogHost />
       <aside className={`sidebar ${sidebarOpen ? "mobile-open" : ""}`}>
         <div className="brand">
           <div className="brand-mark">S</div>
@@ -269,7 +271,7 @@ function BookingsView({ isAdmin, showForm, onShowForm, onNavigate }: { isAdmin: 
   const markBookingDone = async (booking: BookingRecord) => {
     const response = await fetch("/api/booking-update", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: booking.id, eventName: booking.eventName, date: booking.date, startTime: booking.startTime, endTime: booking.endTime, venue: booking.venue, mapsUrl: booking.mapsUrl, packageName: booking.packageName, total: booking.total, downpaymentAmount: booking.downpaymentAmount ?? booking.paidAmount ?? 0, status: "DONE" }) });
     const result = await response.json();
-    if (!response.ok) { window.alert(result.error || "Could not mark booking as done."); return; }
+    if (!response.ok) { await showNotice(result.error || "Could not mark booking as done.", "Could not update booking"); return; }
     const updated = { ...booking, status: "DONE" as const, paidAmount: Number(result.booking.paidAmount), downpaymentAmount: Number(result.booking.downpaymentAmount) };
     setBookings((current) => { const next = current.map((item) => item.id === booking.id ? updated : item); window.localStorage.setItem("salikha-bookings", JSON.stringify(next)); return next; });
     setReconcilingBooking(updated);
@@ -432,7 +434,7 @@ function CashflowView() {
   const unreconciledCount = accounts.filter((account) => { const last = latestReconciliation(account.id); return !last || transactions.some((item) => item.account === account.name && item.status === "POSTED" && item.date > last.reconciled_date); }).length;
   const voidTransaction = async (transaction: CashTransaction) => {
     if (transaction.status === "VOIDED" || voidingId) return;
-    const confirmed = window.confirm(`Void this transaction?\n\n${transaction.description}\n${transaction.direction === "INFLOW" ? "+" : "−"}${money(transaction.amount)}\n\nIt will be excluded from verified cash balances. The ledger entry remains for audit history.`);
+    const confirmed = await showConfirm(`Void this transaction?\n\n${transaction.description}\n${transaction.direction === "INFLOW" ? "+" : "−"}${money(transaction.amount)}\n\nIt will be excluded from verified cash balances. The ledger entry remains for audit history.`, { title: "Void ledger transaction", confirmLabel: "Void transaction", danger: true });
     if (!confirmed) return;
     setVoidingId(transaction.id); setVoidNotice(null);
     try {
@@ -448,7 +450,7 @@ function CashflowView() {
       setVoidNotice({ message: error instanceof Error ? `Could not void this transaction: ${error.message}` : "Could not void this transaction.", error: true });
     } finally { setVoidingId(null); }
   };
-  const clearCashflow = async () => { if (!window.confirm("Clear ALL cash transactions and reconciliations? Cash accounts and opening balances will be kept. This cannot be undone.")) return; try { const response = await fetch("/api/cashflow-clear", { method: "POST" }); const result = await response.json(); if (!response.ok) throw new Error(result.error || "Cashflow records could not be cleared."); setTransactions([]); setReconciliations([]); window.alert(`Cleared ${result.transactions} transactions and ${result.reconciliations} reconciliations.`); } catch (error) { window.alert(error instanceof Error ? error.message : "Cashflow records could not be cleared."); } };
+  const clearCashflow = async () => { if (!await showConfirm("Clear ALL cash transactions and reconciliations? Cash accounts and opening balances will be kept. This cannot be undone.", { title: "Clear cashflow records", confirmLabel: "Clear records", danger: true })) return; try { const response = await fetch("/api/cashflow-clear", { method: "POST" }); const result = await response.json(); if (!response.ok) throw new Error(result.error || "Cashflow records could not be cleared."); setTransactions([]); setReconciliations([]); await showNotice(`Cleared ${result.transactions} transactions and ${result.reconciliations} reconciliations.`, "Cashflow cleared"); } catch (error) { await showNotice(error instanceof Error ? error.message : "Cashflow records could not be cleared.", "Could not clear cashflow"); } };
   return <>
     <section className="page-heading cashflow-heading"><div><p className="eyebrow">Finance / Cashflow</p><h1>Cashflow</h1><p className="subheading">Verified money movement across every business account.</p></div><div className="heading-actions"><button className="secondary-button danger-button" type="button" onClick={() => void clearCashflow()}>Clear records</button><button className="secondary-button" type="button" onClick={() => setShowReconciliation(true)}><ShieldCheck aria-hidden="true" /> Reconcile</button><button className="primary-button" type="button" onClick={() => setShowEntry(true)}><Plus aria-hidden="true" /> Record transaction</button></div></section>
     <section className="finance-access-note"><ShieldCheck aria-hidden="true" /><span>Financial workspace · Visible to Owner, Admin, and Finance roles</span></section>

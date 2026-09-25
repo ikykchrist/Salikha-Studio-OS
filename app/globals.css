@@ -469,3 +469,26 @@ button:not(:disabled):active { transform: scale(.985); }
 :root[data-theme="dark"] .transaction-row.just-voided { animation-name:transaction-void-confirm-dark; }
 @keyframes transaction-void-confirm-dark { 0% { background:#66552b; } 45% { background:#3d3a43; } 100% { background:#302e35; } }
 @media(prefers-reduced-motion:reduce) { .transaction-row.just-voided { animation:none; } }
+
+.app-dialog-backdrop,.admin-override-overlay { align-items:center; animation:dialog-fade-in .16s ease-out both; background:rgb(17 18 24 / 48%); backdrop-filter:blur(3px); display:flex; inset:0; justify-content:center; padding:20px; position:fixed; z-index:1000; }
+.app-dialog { animation:dialog-pop-in .2s cubic-bezier(.2,.8,.2,1) both; background:var(--surface); border:1px solid var(--line); border-radius:16px; box-shadow:0 24px 80px rgb(0 0 0 / 24%); max-width:440px; padding:25px; position:relative; width:min(100%,440px); }
+.app-dialog-icon,.admin-override-icon { align-items:center; background:var(--info-soft); border-radius:12px; color:var(--info); display:flex; height:42px; justify-content:center; width:42px; }
+.app-dialog-icon svg,.admin-override-icon svg { height:20px; width:20px; }
+.app-dialog-icon.danger { background:var(--danger-soft); color:var(--danger); }
+.app-dialog-close { align-items:center; background:var(--surface-muted); border:0; border-radius:8px; color:var(--muted); cursor:pointer; display:flex; height:34px; justify-content:center; position:absolute; right:16px; top:16px; width:34px; }
+.app-dialog-close svg { height:17px; width:17px; }
+.app-dialog h2 { color:var(--ink); font-size:18px; letter-spacing:-.02em; margin:18px 0 7px; }
+.app-dialog p { color:var(--muted); font-size:13px; line-height:1.6; margin:0; white-space:pre-line; }
+.app-dialog-actions { display:flex; gap:9px; justify-content:flex-end; margin-top:24px; }
+.app-dialog-actions button { min-height:40px; }
+.app-dialog-danger-button { background:var(--danger); border:1px solid var(--danger); border-radius:9px; color:white; cursor:pointer; font:inherit; font-size:12px; font-weight:650; padding:0 15px; }
+.admin-override-dialog { animation:dialog-pop-in .2s cubic-bezier(.2,.8,.2,1) both; background:var(--surface); border:1px solid var(--line); border-radius:16px; box-shadow:0 24px 80px rgb(0 0 0 / 24%); max-width:440px; padding:24px; width:min(100%,440px); }
+.admin-override-dialog h2 { color:var(--ink); font-size:18px; margin:15px 0 6px; }
+.admin-override-dialog p { color:var(--muted); font-size:12px; line-height:1.55; margin:0 0 17px; }
+.admin-override-dialog label { color:var(--ink); display:grid; font-size:11px; font-weight:600; gap:6px; }
+.admin-override-dialog input { background:var(--surface); border:1px solid var(--line); border-radius:8px; color:var(--ink); font:inherit; min-height:42px; padding:0 11px; }
+.admin-override-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:18px; }
+@keyframes dialog-fade-in { from { opacity:0; } to { opacity:1; } }
+@keyframes dialog-pop-in { from { opacity:0; transform:translateY(7px) scale(.98); } to { opacity:1; transform:translateY(0) scale(1); } }
+@media(max-width:520px) { .app-dialog-backdrop,.admin-override-overlay { padding:14px; }.app-dialog,.admin-override-dialog { border-radius:14px; padding:20px; }.app-dialog-actions button,.admin-override-actions button { flex:1; justify-content:center; } }
+@media(prefers-reduced-motion:reduce) { .app-dialog-backdrop,.app-dialog,.admin-override-dialog { animation:none; } }

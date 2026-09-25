@@ -7,6 +7,7 @@ import { PackageRecipeManager } from "./package-recipe-manager";
 import { PackageAddonManager } from "./package-addon-manager";
 import { deleteRecord } from "../lib/delete-record";
 import { PackageProfitabilityCalculator } from "./package-profitability-calculator";
+import { showConfirm } from "../lib/ui-dialogs";
 
 type PackageRecord = { id: string; name: string; description: string; basePrice: number; duration: string; inclusions: string; notes: string; calendarColor?: string; active: boolean };
 
@@ -23,6 +24,6 @@ export function PackageDetailActions({ packageItem, onClose, onNavigate: _onNavi
     <PackageRecipeManager packageId={packageItem.id} packageName={packageItem.name} />
     <PackageAddonManager packageId={packageItem.id} />
     <PackageProfitabilityCalculator packageId={packageItem.id} basePrice={packageItem.basePrice} />
-    <div className="package-detail-actions"><button className="secondary-button" type="button" onClick={duplicate}><Copy aria-hidden="true" /> Duplicate</button><button className="secondary-button" type="button" onClick={() => { const updated = { ...packageItem, active: false }; setActive(false); void onSave(updated); }} disabled={!active}><Archive aria-hidden="true" /> {active ? "Archive" : "Archived"}</button><button className="secondary-button danger-button" type="button" onClick={() => { if (window.confirm("Delete this package? This cannot be undone.")) void deleteRecord("service_packages", packageItem.id, "salikha-packages"); }}>Delete package</button><button className="primary-button" type="button" onClick={onCreateBooking}><Plus aria-hidden="true" /> Create booking <ArrowRight aria-hidden="true" /></button></div>
+    <div className="package-detail-actions"><button className="secondary-button" type="button" onClick={duplicate}><Copy aria-hidden="true" /> Duplicate</button><button className="secondary-button" type="button" onClick={() => { const updated = { ...packageItem, active: false }; setActive(false); void onSave(updated); }} disabled={!active}><Archive aria-hidden="true" /> {active ? "Archive" : "Archived"}</button><button className="secondary-button danger-button" type="button" onClick={async () => { if (await showConfirm("Delete this package? This cannot be undone.", { title: "Delete package", confirmLabel: "Delete package", danger: true })) await deleteRecord("service_packages", packageItem.id, "salikha-packages"); }}>Delete package</button><button className="primary-button" type="button" onClick={onCreateBooking}><Plus aria-hidden="true" /> Create booking <ArrowRight aria-hidden="true" /></button></div>
   </aside>{showEdit && <PackageEditForm initial={packageItem} onClose={() => setShowEdit(false)} onSave={async (updated) => { await onSave(updated); setShowEdit(false); }} />}</>;
 }

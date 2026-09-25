@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ListPlus, LoaderCircle, Plus, Trash2 } from "lucide-react";
 import { getLocalDatabase } from "../lib/local-database";
+import { showConfirm } from "../lib/ui-dialogs";
 
 type Addon = { id: string; name: string; price: number; active: boolean };
 
@@ -43,7 +44,7 @@ export function PackageAddonManager({ packageId }: { packageId: string }) {
   };
 
   const remove = async (item: Addon) => {
-    if (!window.confirm(`Remove “${item.name}” from this package?`)) return;
+    if (!await showConfirm(`Remove “${item.name}” from this package?`, { title: "Remove add-on", confirmLabel: "Remove", danger: true })) return;
     const database = getLocalDatabase();
     if (!database) { setError("Local database is unavailable."); return; }
     setError("");

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Boxes, LoaderCircle, Plus, Trash2, X } from "lucide-react";
+import { showConfirm } from "../lib/ui-dialogs";
 
 type RecipeLine = {
   id: string;
@@ -61,9 +62,9 @@ export function PackageRecipeManager({ packageId, packageName }: { packageId: st
     setNotice("");
     setEditorOpen(true);
   };
-  const closeEditor = () => {
+  const closeEditor = async () => {
     if (saving) return;
-    if (draftChanged && !window.confirm("Discard your unsaved recipe changes?")) return;
+    if (draftChanged && !await showConfirm("Discard your unsaved recipe changes?", { title: "Discard unsaved recipe", confirmLabel: "Discard changes", danger: true })) return;
     setEditorOpen(false);
     setError("");
   };
