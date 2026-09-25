@@ -4,7 +4,7 @@ import { Pool } from "pg";
 let pool: Pool | undefined;
 
 export function getLocalPostgresPool() {
-  const connectionString = process.env.DATABASE_URL;
+  const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL;
   if (!connectionString) throw new Error("DATABASE_URL is required for PostgreSQL.");
 
   const databaseUrl = new URL(connectionString);
