@@ -290,7 +290,16 @@ button { color: inherit; font: inherit; cursor: pointer; }
 .preparation-state strong,.preparation-state small { display:block; }.preparation-state strong { font-size:12px; }.preparation-state small { font-size:11px; margin-top:3px; opacity:.82; }
 :root[data-theme="dark"] .booking-preparation-status.pending,:root[data-theme="dark"] .preparation-state.is-pending { background:#3a321d; border-color:#655327; color:#f0d37d; }
 :root[data-theme="dark"] .booking-preparation-status.ready,:root[data-theme="dark"] .preparation-state.is-ready { background:#20372b; border-color:#315c43; color:#a8e0ba; }
-.auth-loading { align-items:center; background:var(--canvas); color:var(--muted); display:flex; height:100dvh; justify-content:center; }
+.auth-loading, .loading-screen { align-items:center; background:var(--canvas); color:var(--muted); display:flex; flex-direction:column; height:100dvh; justify-content:center; }
+.loading-mark { align-items:center; animation: loading-float 1.8s ease-in-out infinite; background:var(--accent); border-radius:14px; box-shadow:0 12px 28px rgba(217,54,69,.25); color:#fff; display:flex; font-family:Georgia,serif; font-size:28px; height:58px; justify-content:center; position:relative; width:58px; }
+.loading-mark::after { animation: loading-ring 1.25s linear infinite; border:2px solid rgba(217,54,69,.18); border-left-color:var(--accent); border-radius:50%; content:""; inset:-9px; position:absolute; }
+.loading-dots { display:flex; gap:5px; margin-top:22px; }
+.loading-dots i { animation: loading-dot 1.15s ease-in-out infinite; background:var(--accent); border-radius:50%; height:6px; opacity:.35; width:6px; }
+.loading-dots i:nth-child(2) { animation-delay:.15s; }.loading-dots i:nth-child(3) { animation-delay:.3s; }
+.loading-screen p { color:var(--ink); font-size:13px; font-weight:700; margin:13px 0 0; text-align:center; }.loading-screen p span { color:var(--muted); display:block; font-size:11px; font-weight:400; margin-top:5px; }
+@keyframes loading-float { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-4px); } }
+@keyframes loading-ring { to { transform:rotate(360deg); } }
+@keyframes loading-dot { 0%,100% { opacity:.3; transform:translateY(0); } 50% { opacity:1; transform:translateY(-3px); } }
 .team-panel { padding:24px; }
 .team-create-form { display:grid; gap:14px; grid-template-columns:repeat(2,minmax(0,1fr)); margin:20px 0 26px; }
 .team-create-form label,.profile-edit-form label { color:var(--muted); display:grid; font-size:11px; font-weight:650; gap:6px; }

@@ -26,6 +26,10 @@ function Skeleton({ className = "" }: { className?: string }) {
   return <span className={`skeleton ${className}`} aria-hidden="true" />;
 }
 
+function LoadingScreen({ label = "Loading workspace" }: { label?: string }) {
+  return <div className="loading-screen" role="status" aria-live="polite"><div className="loading-mark" aria-hidden="true"><span>S</span></div><div className="loading-dots" aria-hidden="true"><i /><i /><i /></div><p>{label}<span>Preparing your studio workspace</span></p></div>;
+}
+
 export default function Home() {
   const [loading, setLoading] = useState(true);
   const [activeView, setActiveView] = useState("Overview");
@@ -114,7 +118,8 @@ export default function Home() {
       const verifiedCash = accounts.reduce((sum, a) => sum + Number(a.opening_balance || 0), 0) + txs.filter((t) => t.status === "POSTED").reduce((sum, t) => sum + (t.direction === "INFLOW" ? Number(t.amount) : -Number(t.amount)), 0);
       const lowStock = inventory.filter((item) => item.is_active && Number(item.on_hand) <= Number(item.reorder_level)).length;
       setDashboardStats({ revenue, bookings: activeBookings.length, outstanding, lowStock, paidExpenses, verifiedCash });
-      setUpcomingBookings(activeBookings.filter((booking) => bookingDateInput(booking.event_date) >= todayIso).sort((a, b) => bookingDateInput(a.event_date).localeCompare(bookingDateInput(b.event_date))).slice(0, 5));
+      const currentMonth = todayIso.slice(0, 7);
+      setUpcomingBookings(activeBookings.filter((booking) => { const date = bookingDateInput(booking.event_date); return date >= todayIso && date.slice(0, 7) === currentMonth; }).sort((a, b) => { const dateDifference = bookingDateInput(a.event_date).localeCompare(bookingDateInput(b.event_date)); if (dateDifference) return dateDifference; const timeDifference = (a.start_time || "23:59").localeCompare(b.start_time || "23:59"); return timeDifference || a.event_name.localeCompare(b.event_name); }).slice(0, 5));
       const activePackages = (packagesRes.data || []) as Array<{ is_active: boolean }>;
       setReadiness({ businessData: (clientsRes.count || 0) > 0, packages: activePackages.some((item) => item.is_active), consumables: inventory.some((item) => item.is_active), calendar: false });
       setActionFlags({ overdueExpenses: expenses.filter((e) => e.status === "PENDING").length, lowStock, pendingBookings: activeBookings.length });
@@ -138,7 +143,7 @@ export default function Home() {
   ];
   const readyChecks = healthChecks.filter((item) => readiness[item.key]).length;
 
-  if (!authChecked || !authUser) return <div className="auth-loading">Checking secure session…</div>;
+  if (!authChecked || !authUser) return <LoadingScreen label="Checking secure session" />;
 
   return (
     <div className="app-shell">
@@ -217,7 +222,7 @@ export default function Home() {
 
           <section className="content-grid">
             <article className="panel schedule-panel">
-              <div className="panel-heading"><div><p className="eyebrow">Operations</p><h2>Upcoming schedule</h2></div><button className="text-button" type="button" onClick={() => setActiveView("Calendar")}>View calendar <ArrowRight aria-hidden="true" /></button></div>
+              <div className="panel-heading"><div><p className="eyebrow">Operations · This month</p><h2>Upcoming schedule</h2></div><button className="text-button" type="button" onClick={() => setActiveView("Calendar")}>View calendar <ArrowRight aria-hidden="true" /></button></div>
               {loading ? <div className="loading-list"><Skeleton /><Skeleton /><Skeleton /></div> : upcomingBookings.length === 0 ? <EmptyState title="Your schedule is clear" description="No future bookings are Pending." action="Create a booking" onAction={() => { setActiveView("Bookings"); setShowBookingForm(true); }} /> : <div className="upcoming-list">{upcomingBookings.map((booking) => <article className="upcoming-card" key={booking.id}><div className="upcoming-card-header"><div><small>Event</small><strong>{booking.event_name}</strong><span>{booking.clients?.display_name || "Unknown client"}</span></div><div className="upcoming-balance"><small>Outstanding balance</small><strong>₱{Math.max(0, Number(booking.total_amount || 0) - Number(booking.downpayment_amount || 0)).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</strong><span className="upcoming-status">Pending</span></div></div><div className="upcoming-card-details"><div><small>Package</small><strong>{booking.service_packages?.name || "Custom service"}</strong></div><div><small>Date</small><strong>{bookingDateLabel(booking.event_date)}</strong></div><div><small>Time</small><strong>{booking.start_time ? bookingTimeLabel(booking.start_time) : "Not set"} – {booking.end_time ? bookingTimeLabel(booking.end_time) : "Not set"}</strong></div><div><small>Venue</small><strong>{booking.venue || "Not set"}</strong>{booking.maps_url && <a className="booking-map-link" href={booking.maps_url} target="_blank" rel="noreferrer"><MapPin aria-hidden="true" /> Open map</a>}</div></div></article>)}</div>}
             </article>
             <article className="panel attention-panel">
