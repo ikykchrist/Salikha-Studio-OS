@@ -82,6 +82,12 @@ export async function POST(request: Request) {
     const body = await request.json() as RequestBody;
     const { table, operation } = body;
     if (!tables.has(table) || !["select", "insert", "update", "delete"].includes(operation)) return Response.json({ error: "Unsupported table or operation." }, { status: 400 });
+    const preparationFields = ["preparation_layout_ready", "preparation_venue_ready", "preparation_backdrop_color"];
+    const payloadRows = Array.isArray(body.payload) ? body.payload : body.payload ? [body.payload] : [];
+    if (table === "bookings" && ["insert", "update"].includes(operation) && payloadRows.some((row) => preparationFields.some((field) => field in row))) {
+      const admin = await requireUser(request, true);
+      if (admin.response) return admin.response;
+    }
     const pool = getLocalPostgresPool();
     const allowed = await columnsFor(table);
     if (allowed.size === 0) return Response.json({ error: `Local table ${table} is not initialized.` }, { status: 503 });

@@ -112,6 +112,9 @@ create table public.bookings (
       else 'OVERPAID'::public.payment_status end
   ) stored,
   status public.booking_status not null default 'PENDING',
+  preparation_layout_ready boolean not null default false,
+  preparation_venue_ready boolean not null default false,
+  preparation_backdrop_color text check (preparation_backdrop_color is null or length(trim(preparation_backdrop_color)) between 1 and 80),
   consumables_reconciled_at timestamptz,
   cashflow_posted_at timestamptz,
   notes text,
