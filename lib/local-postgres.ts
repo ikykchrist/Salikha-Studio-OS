@@ -5,11 +5,12 @@ let pool: Pool | undefined;
 
 export function getLocalPostgresPool() {
   const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) throw new Error("DATABASE_URL is required for the local PostgreSQL database.");
+  if (!connectionString) throw new Error("DATABASE_URL is required for PostgreSQL.");
 
   const databaseUrl = new URL(connectionString);
-  if (!["localhost", "127.0.0.1", "::1"].includes(databaseUrl.hostname)) {
-    throw new Error("DATABASE_URL must point to localhost; external databases are disabled for this test phase.");
+  const isLoopback = ["localhost", "127.0.0.1", "::1"].includes(databaseUrl.hostname);
+  if (process.env.NODE_ENV !== "production" && !isLoopback) {
+    throw new Error("Development DATABASE_URL must point to localhost. Use a hosted PostgreSQL URL only in production.");
   }
 
   pool ??= new Pool({ connectionString, max: 5, connectionTimeoutMillis: 3000, idleTimeoutMillis: 10000 });
