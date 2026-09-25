@@ -449,3 +449,23 @@ button:not(:disabled):active { transform: scale(.985); }
 :root[data-theme="dark"] .analytics-bar.negative { background:linear-gradient(180deg,#b4d2ff,#5077ad); }
 @media(max-width:900px) { .report-analytics-grid { grid-template-columns:1fr; } }
 @media(max-width:620px) { .analytics-chart { min-height:230px; padding:14px 11px; }.analytics-bars { height:150px; }.analytics-pie-layout { gap:13px; }.analytics-pie { flex-basis:110px; }.analytics-pie::before { inset:22px; }.analytics-line { height:155px; } }
+.void-notice { align-items:center; border:1px solid; border-radius:9px; display:flex; font-size:11px; gap:9px; line-height:1.45; margin:14px 0 4px; padding:11px 12px; }
+.void-notice.success { background:var(--success-soft); border-color:var(--success-line); color:var(--success); }
+.void-notice.error { background:var(--danger-soft); border-color:var(--danger-line); color:var(--danger); }
+.void-notice > svg { flex:0 0 16px; height:16px; width:16px; }
+.void-notice span { flex:1; }
+.void-notice button { align-items:center; background:transparent; border:0; color:inherit; display:flex; justify-content:center; padding:4px; }
+.void-notice button svg { height:14px; width:14px; }
+.transaction-row { background:transparent; transition:background-color .3s ease,color .3s ease,border-color .3s ease; }
+.transaction-row.voided { background:#e7e7eb; border-bottom-color:#d0cfd5; color:#68666f; }
+.transaction-row.voided strong,.transaction-row.voided .muted-label { color:#5e5b65; }
+.transaction-row.voided .inflow,.transaction-row.voided .outflow { color:#74717a; }
+.transaction-row.voided .row-menu { color:#696670; font-size:9px; font-weight:700; letter-spacing:0; }
+.transaction-row.just-voided { animation:transaction-void-confirm .72s ease-out both; }
+@keyframes transaction-void-confirm { 0% { background:#ffe9b5; } 45% { background:#d0d0d6; } 100% { background:#e7e7eb; } }
+:root[data-theme="dark"] .transaction-row.voided { background:#302e35; border-bottom-color:#44414a; color:#c0bdc6; }
+:root[data-theme="dark"] .transaction-row.voided strong,:root[data-theme="dark"] .transaction-row.voided .muted-label,:root[data-theme="dark"] .transaction-row.voided .row-menu { color:#c0bdc6; }
+:root[data-theme="dark"] .transaction-row.voided .inflow,:root[data-theme="dark"] .transaction-row.voided .outflow { color:#aaa7b0; }
+:root[data-theme="dark"] .transaction-row.just-voided { animation-name:transaction-void-confirm-dark; }
+@keyframes transaction-void-confirm-dark { 0% { background:#66552b; } 45% { background:#3d3a43; } 100% { background:#302e35; } }
+@media(prefers-reduced-motion:reduce) { .transaction-row.just-voided { animation:none; } }
