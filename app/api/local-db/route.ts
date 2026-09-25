@@ -39,9 +39,27 @@ async function columnsFor(table: string) {
   return new Set<string>(rows.map((row: { column_name: string }) => row.column_name));
 }
 
+function splitSelection(columns: string) {
+  const items: string[] = [];
+  let depth = 0;
+  let current = "";
+  for (const character of columns) {
+    if (character === "(") depth += 1;
+    if (character === ")") depth -= 1;
+    if (character === "," && depth === 0) {
+      if (current.trim()) items.push(current.trim());
+      current = "";
+      continue;
+    }
+    current += character;
+  }
+  if (current.trim()) items.push(current.trim());
+  return items;
+}
+
 function selectedColumns(table: string, columns: string | undefined, allowed: Set<string>) {
   if (!columns || columns.trim() === "*") return `"${table}".*`;
-  const items = columns.split(",").map((part) => part.trim()).filter(Boolean);
+  const items = splitSelection(columns);
   const expressions: string[] = [];
   for (const item of items) {
     const relation = /^([a-z_][a-z0-9_]*)\(([^()]*)\)$/i.exec(item);
