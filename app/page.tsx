@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import { AlertCircle, AlertTriangle, Archive, ArrowLeft, ArrowLeftRight, ArrowRight, Banknote, Bell, Boxes, CalendarDays, CalendarRange, Camera, ChartNoAxesCombined, Check, ChevronLeft, ChevronRight, CircleCheck, CircleDollarSign, ClipboardList, Clock3, Copy, Download, ExternalLink, FileBarChart, FileDown, History, LayoutDashboard, ListPlus, LogOut, Mail, MapPin, Menu, Minus, Moon, Pencil, Phone, Plus, Receipt, RefreshCw, RotateCcw, Search, Settings, ShieldCheck, Sparkles, SlidersHorizontal, Sun, TrendingDown, TrendingUp, Users, WalletCards, Wrench, X } from "lucide-react";
 import { getLocalDatabase } from "../lib/local-database";
@@ -65,11 +65,14 @@ export default function Home() {
     return () => window.clearTimeout(timer);
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const theme = window.localStorage.getItem("salikha-theme");
     const dark = theme === "dark";
     setDarkMode(dark);
     document.documentElement.dataset.theme = dark ? "dark" : "light";
+  }, []);
+
+  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       if (notificationsOpen) { setNotificationsOpen(false); return; }

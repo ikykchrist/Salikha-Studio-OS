@@ -358,6 +358,9 @@ button { color: inherit; font: inherit; cursor: pointer; }
   --focus-ring: rgba(217, 54, 69, .28);
 }
 :root[data-theme="dark"] {
+  --ink: #f2f0f4; --muted: #aaa6b1; --line: #393640; --surface: #232128; --canvas: #19181e;
+  --accent: #e44858; --accent-dark: #ff98a3; --soft-accent: #40242b; --positive: #63c79c; --dark: #111015;
+  --surface-raised: #2b2931; --surface-inset: #1e1d23; --hover-surface: #302d36;
   --success: #a8e0ba; --success-soft: #20372b; --success-line: #315c43;
   --warning: #f0d37d; --warning-soft: #3a321d; --warning-line: #655327;
   --danger: #ffb3bd; --danger-soft: #40252b; --danger-line: #693640;
@@ -389,6 +392,178 @@ button:not(:disabled):active { transform: scale(.985); }
   background: linear-gradient(100deg, #302e35 25%, #3a3740 45%, #302e35 65%);
   background-size: 220% 100%;
 }
+
+/* Complete dark palette pass: keep controls, drawers, and module cards on
+   the same neutral surfaces while retaining semantic status contrast. */
+:root[data-theme="dark"] .secondary-button,
+:root[data-theme="dark"] .filter-button,
+:root[data-theme="dark"] .filter-select,
+:root[data-theme="dark"] .filter-context,
+:root[data-theme="dark"] .search-field,
+:root[data-theme="dark"] .calendar-status,
+:root[data-theme="dark"] .calendar-nav,
+:root[data-theme="dark"] .today-button,
+:root[data-theme="dark"] .calendar-day,
+:root[data-theme="dark"] .agenda-item,
+:root[data-theme="dark"] .package-color-options label,
+:root[data-theme="dark"] .refresh-button,
+:root[data-theme="dark"] .client-row,
+:root[data-theme="dark"] .expense-row,
+:root[data-theme="dark"] .inventory-row,
+:root[data-theme="dark"] .equipment-row,
+:root[data-theme="dark"] .booking-row-action,
+:root[data-theme="dark"] .action-list button,
+:root[data-theme="dark"] .upcoming-card,
+:root[data-theme="dark"] .settings-card,
+:root[data-theme="dark"] .booking-drawer,
+:root[data-theme="dark"] .calendar-setup-dialog,
+:root[data-theme="dark"] .invoice-maintenance-dialog {
+  background: var(--surface-raised); border-color: var(--line); color: var(--ink);
+}
+:root[data-theme="dark"] .secondary-button:hover:not(:disabled),
+:root[data-theme="dark"] .filter-button:hover,
+:root[data-theme="dark"] .calendar-day:hover:not(:disabled),
+:root[data-theme="dark"] .client-row:hover,
+:root[data-theme="dark"] .client-row.selected,
+:root[data-theme="dark"] .expense-row:hover,
+:root[data-theme="dark"] .expense-row.selected,
+:root[data-theme="dark"] .inventory-row:hover,
+:root[data-theme="dark"] .inventory-row.selected,
+:root[data-theme="dark"] .equipment-row:hover,
+:root[data-theme="dark"] .equipment-row.selected,
+:root[data-theme="dark"] .booking-row:hover,
+:root[data-theme="dark"] .action-list button:hover {
+  background: var(--hover-surface); border-color: #51434a; color: var(--ink);
+}
+:root[data-theme="dark"] .empty-mark,
+:root[data-theme="dark"] .account-icon,
+:root[data-theme="dark"] .package-loading-note,
+:root[data-theme="dark"] .reconciliation-result,
+:root[data-theme="dark"] .profitability-results > div,
+:root[data-theme="dark"] .recipe-editor-note,
+:root[data-theme="dark"] .recipe-summary-main em,
+:root[data-theme="dark"] .invoice-empty .empty-mark,
+:root[data-theme="dark"] .invoice-paper-icon {
+  background: var(--surface-raised); color: var(--muted);
+}
+:root[data-theme="dark"] .drawer-body,
+:root[data-theme="dark"] .form-section,
+:root[data-theme="dark"] .setup-select-label select,
+:root[data-theme="dark"] .direction-toggle,
+:root[data-theme="dark"] .classification-toggle,
+:root[data-theme="dark"] .invoice-search input {
+  background: var(--surface-inset); color: var(--ink); border-color: var(--line);
+}
+:root[data-theme="dark"] .direction-toggle button.active,
+:root[data-theme="dark"] .classification-toggle button.active {
+  background: var(--surface-raised); color: var(--ink);
+}
+:root[data-theme="dark"] .drawer-body > .form-section,
+:root[data-theme="dark"] .profitability-results > div,
+:root[data-theme="dark"] .invoice-maintenance-dialog {
+  border-color: var(--line); box-shadow: 0 2px 12px rgb(0 0 0 / 16%);
+}
+:root[data-theme="dark"] .text-button,
+:root[data-theme="dark"] .booking-map-link,
+:root[data-theme="dark"] .missing-link,
+:root[data-theme="dark"] .danger-button { color: var(--accent-dark); }
+:root[data-theme="dark"] .danger-button:hover:not(:disabled),
+:root[data-theme="dark"] .recipe-remove-button:hover {
+  background: var(--danger-soft); border-color: var(--danger-line); color: var(--danger);
+}
+:root[data-theme="dark"] .dashboard-data-error,
+:root[data-theme="dark"] .form-warning,
+:root[data-theme="dark"] .entry-warning,
+:root[data-theme="dark"] .inventory-form-note,
+:root[data-theme="dark"] .maintenance-alert,
+:root[data-theme="dark"] .invoice-email-setup,
+:root[data-theme="dark"] .setup-hero {
+  background: var(--warning-soft); border-color: var(--warning-line); color: var(--warning);
+}
+:root[data-theme="dark"] .dashboard-data-error,
+:root[data-theme="dark"] .invoice-email-setup strong,
+:root[data-theme="dark"] .inventory-form-note { color: var(--warning); }
+:root[data-theme="dark"] .calendar-day { color: var(--ink); }
+:root[data-theme="dark"] .calendar-day.today span { background: var(--soft-accent); color: var(--accent-dark); }
+:root[data-theme="dark"] .status-pill.draft,
+:root[data-theme="dark"] .invoice-status.draft,
+:root[data-theme="dark"] .pulse-icon.neutral { background: var(--neutral-soft); border-color: var(--neutral-line); color: var(--neutral); }
+:root[data-theme="dark"] .status-pill.pending,
+:root[data-theme="dark"] .status-pill.submitted,
+:root[data-theme="dark"] .settings-status.pending,
+:root[data-theme="dark"] .upcoming-status,
+:root[data-theme="dark"] .stock-pill.low { background: var(--warning-soft); border-color: var(--warning-line); color: var(--warning); }
+:root[data-theme="dark"] .status-pill.approved,
+:root[data-theme="dark"] .status-pill.paid,
+:root[data-theme="dark"] .status-pill.healthy,
+:root[data-theme="dark"] .invoice-status.paid,
+:root[data-theme="dark"] .stock-pill.healthy { background: var(--success-soft); border-color: var(--success-line); color: var(--success); }
+:root[data-theme="dark"] .invoice-status.sent { background: var(--info-soft); border-color: var(--info-line); color: var(--info); }
+:root[data-theme="dark"] .invoice-status.overdue,
+:root[data-theme="dark"] .invoice-status.void { background: var(--danger-soft); border-color: var(--danger-line); color: var(--danger); }
+:root[data-theme="dark"] .invoice-row:hover,
+:root[data-theme="dark"] .invoice-row.selected { background: var(--soft-accent); }
+:root[data-theme="dark"] .invoice-search input,
+:root[data-theme="dark"] .filter-button,
+:root[data-theme="dark"] .filter-select,
+:root[data-theme="dark"] .filter-context,
+:root[data-theme="dark"] .recipe-item-field,
+:root[data-theme="dark"] .recipe-quantity-row > label { color: var(--ink); }
+:root[data-theme="dark"] .recipe-item-field select,
+:root[data-theme="dark"] .recipe-quantity-control input,
+:root[data-theme="dark"] .recipe-remove-button { background: var(--surface-inset); border-color: var(--line); color: var(--ink); }
+:root[data-theme="dark"] .inventory-price-metric,
+:root[data-theme="dark"] .equipment-metric.warning,
+:root[data-theme="dark"] .equipment-metric.danger { background: var(--surface-raised); border-color: var(--line); }
+:root[data-theme="dark"] .equipment-metric.warning { box-shadow: inset 3px 0 var(--warning); }
+:root[data-theme="dark"] .equipment-metric.danger { box-shadow: inset 3px 0 var(--danger); }
+:root[data-theme="dark"] .report-kpis > div,
+:root[data-theme="dark"] .report-toolbar { background: var(--surface); border-color: var(--line); color: var(--ink); }
+:root[data-theme="dark"] .report-groups button { color: var(--muted); }
+:root[data-theme="dark"] .report-groups button:hover,
+:root[data-theme="dark"] .report-groups button.active { background: var(--soft-accent); color: var(--accent-dark); }
+:root[data-theme="dark"] .scope-statement { background: var(--success-soft); color: var(--success); }
+:root[data-theme="dark"] .pulse-icon.inflow { background: var(--success-soft); color: var(--success); }
+:root[data-theme="dark"] .pulse-icon.outflow { background: var(--danger-soft); color: var(--danger); }
+:root[data-theme="dark"] .pulse-icon.neutral { background: var(--neutral-soft); color: var(--neutral); }
+:root[data-theme="dark"] .action-list button > b { background: var(--soft-accent); color: var(--accent-dark); }
+:root[data-theme="dark"] .action-icon { background: var(--soft-accent); color: var(--accent-dark); }
+:root[data-theme="dark"] .recipe-error,
+:root[data-theme="dark"] .profitability-results .profit-negative strong { color: var(--danger); }
+:root[data-theme="dark"] .recipe-success,
+:root[data-theme="dark"] .recipe-summary-stock .recipe-available,
+:root[data-theme="dark"] .profitability-results .profit-positive strong { color: var(--success); }
+:root[data-theme="dark"] .equipment-status.great { background: var(--success-soft); color: var(--success); }
+:root[data-theme="dark"] .equipment-status.needs_attention { background: var(--warning-soft); color: var(--warning); }
+:root[data-theme="dark"] .equipment-status.for_fixing,
+:root[data-theme="dark"] .equipment-status.broken { background: var(--danger-soft); color: var(--danger); }
+:root[data-theme="dark"] .calendar-event-chip { color: #171719; }
+:root[data-theme="dark"] .invoice-email-setup code { background: rgb(0 0 0 / 18%); }
+:root[data-theme="dark"] .invoice-maintenance-actions .secondary-button,
+:root[data-theme="dark"] .invoice-actions .secondary-button { background: var(--surface-raised); }
+:root[data-theme="dark"] .account-name,
+:root[data-theme="dark"] .recipe-summary-main em,
+:root[data-theme="dark"] .recipe-item-field,
+:root[data-theme="dark"] .recipe-quantity-row > label { color: var(--muted); }
+:root[data-theme="dark"] .client-avatar,
+:root[data-theme="dark"] .large-client-avatar { background: var(--soft-accent); color: var(--accent-dark); }
+:root[data-theme="dark"] .profitability-status.is-positive { background: var(--success-soft); color: var(--success); }
+:root[data-theme="dark"] .profitability-status.is-negative { background: var(--danger-soft); color: var(--danger); }
+:root[data-theme="dark"] .setup-hero { background: var(--soft-accent); border-color: var(--danger-line); }
+:root[data-theme="dark"] .login-card { background: var(--surface); border-color: var(--line); color: var(--ink); }
+:root[data-theme="dark"] .login-brand small,
+:root[data-theme="dark"] .login-subtitle,
+:root[data-theme="dark"] .login-card label small { color: var(--muted); }
+:root[data-theme="dark"] .login-title-icon { background: var(--soft-accent); color: var(--accent-dark); }
+:root[data-theme="dark"] .login-error { background: var(--danger-soft); color: var(--danger); }
+:root[data-theme="dark"] .cashflow-total { background: #111015; border-color: #34313a; }
+:root[data-theme="dark"] .cashflow-total .metric-top,
+:root[data-theme="dark"] .cashflow-total small { color: #c0bdc6; }
+:root[data-theme="dark"] .cashflow-total .metric-top svg,
+:root[data-theme="dark"] .cashflow-trend { color: #ff9aa5; }
+:root[data-theme="dark"] .drawer-body > .form-section { background: var(--surface); }
+:root[data-theme="dark"] .invoice-paper { color-scheme: light; }
+:root[data-theme="dark"] .primary-button:hover:not(:disabled) { background: #b82d3b; border-color: #b82d3b; }
 .status-pill, .booking-preparation-status, .preparation-state { border-color: var(--neutral-line); background: var(--neutral-soft); color: var(--neutral); }
 .status-pill.pending, .status-pill.draft, .status-pill.submitted,
 .booking-preparation-status.pending, .preparation-state.is-pending {
