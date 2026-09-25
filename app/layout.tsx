@@ -6,6 +6,10 @@ export const metadata: Metadata = {
   title: "Salikha Studio OS",
   description: "Internal operations system for Salikha Studio.",
   manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [{ url: "/icon.svg?v=2", type: "image/svg+xml" }],
+    apple: [{ url: "/apple-icon.svg?v=2", type: "image/svg+xml" }],
+  },
   appleWebApp: { capable: true, statusBarStyle: "default", title: "Salikha OS" },
 };
 
