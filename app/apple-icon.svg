@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Salikha Studio OS icon">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#17181b"/><stop offset="1" stop-color="#050506"/></linearGradient>
+    <linearGradient id="ruby" x1="0.1" y1="0" x2="0.9" y2="1"><stop offset="0" stop-color="#ff5a57"/><stop offset=".28" stop-color="#f21f3f"/><stop offset=".7" stop-color="#a9082b"/><stop offset="1" stop-color="#5f071d"/></linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="16" stdDeviation="14" flood-color="#000" flood-opacity=".58"/></filter>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <g filter="url(#shadow)">
+    <path d="M365 126c-31-33-73-50-121-50-71 0-119 35-119 84 0 43 33 66 102 85l41 12c28 8 42 18 42 33 0 18-20 31-51 31-37 0-70-15-98-45l-51 54c38 42 88 64 150 64 79 0 132-39 132-98 0-47-31-75-103-95l-43-12c-29-8-40-17-40-31 0-17 17-28 45-28 28 0 55 11 78 34z" fill="url(#ruby)"/>
+    <path d="M147 160c-14 26 6 43 61 58l50 14c59 17 93 43 93 94 0 12-2 23-6 33 22-18 34-43 34-75 0-47-31-75-103-95l-43-12c-29-8-40-17-40-31 0-17 17-28 45-28 28 0 55 11 78 34l49-26c-31-33-73-50-121-50-47 0-81 16-97 42z" fill="#ff4d4a" opacity=".34"/>
+    <path d="M139 160c-8 18 8 33 48 45" fill="none" stroke="#ffb0a6" stroke-width="4" stroke-linecap="round" opacity=".72"/>
+  </g>
+</svg>

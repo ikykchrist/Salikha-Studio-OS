@@ -11,8 +11,8 @@ The first vertical slice is the responsive operations dashboard foundation. It d
 - Next.js and React
 - TypeScript with strict mode
 - CSS design tokens and accessible semantic HTML
-- PostgreSQL 17 for the local test database
-- Next.js server API with a loopback-only database connection
+- PostgreSQL 17 for local development, with a hosted PostgreSQL option for deployment
+- Next.js server API with server-side database access
 
 ## Run locally
 
@@ -30,8 +30,10 @@ npm run build
 
 ## Local database testing
 
-The test environment uses a standalone PostgreSQL 17 container. Supabase
-packages, services, APIs, Auth, Storage, and hosted database URLs are not used by the app.
+The local test environment uses a standalone PostgreSQL 17 container. The
+database URL is server-only and must never use a `NEXT_PUBLIC_` prefix. Local
+development rejects non-loopback database hosts; production deployments may
+use a hosted PostgreSQL connection string.
 The database port is bound to `127.0.0.1` only. Docker Desktop must be running.
 
 Set `DATABASE_URL` in `.env.local` to the local-only example in `.env.example`,
@@ -56,7 +58,16 @@ $env:DATABASE_URL="postgresql://salikha:salikha_local_dev_only@127.0.0.1:55432/s
 node scripts/import-google-sheet.mjs --apply
 ```
 
-The importer rejects non-local database hosts. Google Sheets remains a read-only source.
+The importer is intended for local migration work only. Google Sheets remains a read-only source.
+
+## Demo deployment
+
+For the first demo, deploy the Next.js app to Vercel and connect the Supabase
+integration. Apply `database/schema.sql` and `database/seed.sql` to the
+Supabase SQL editor. The app accepts the integration's server-side
+`POSTGRES_URL` variable, or an explicitly configured `DATABASE_URL`. Do not
+configure Google Calendar yet; its OAuth routes remain disabled until the core
+deployment has been verified.
 
 ## Product rules
 
