@@ -134,6 +134,7 @@ create table public.invoices (
   due_date date,
   status text not null default 'DRAFT' check (status in ('DRAFT', 'SENT', 'VOID')),
   line_items jsonb not null default '[]'::jsonb check (jsonb_typeof(line_items) = 'array'),
+  booking_details jsonb not null default '{}'::jsonb check (jsonb_typeof(booking_details) = 'object'),
   subtotal numeric(12,2) not null default 0 check (subtotal >= 0),
   discount_amount numeric(12,2) not null default 0 check (discount_amount >= 0),
   tax_rate numeric(5,2) not null default 0 check (tax_rate >= 0 and tax_rate <= 100),
@@ -150,6 +151,12 @@ create table public.invoices (
 create index invoices_client_date_idx on public.invoices (client_id, issue_date desc);
 create index invoices_booking_idx on public.invoices (booking_id) where booking_id is not null;
 create unique index invoices_one_active_per_booking_idx on public.invoices (booking_id) where booking_id is not null and status <> 'VOID';
+
+create table public.invoice_settings (
+  id boolean primary key default true check (id),
+  logo_data_url text,
+  updated_at timestamptz not null default now()
+);
 
 create table public.payments (
   id uuid primary key default gen_random_uuid(),
@@ -363,6 +370,7 @@ alter table public.clients enable row level security;
 alter table public.service_packages enable row level security;
 alter table public.bookings enable row level security;
 alter table public.invoices enable row level security;
+alter table public.invoice_settings enable row level security;
 alter table public.payments enable row level security;
 alter table public.cash_accounts enable row level security;
 alter table public.cash_transactions enable row level security;
@@ -388,6 +396,8 @@ create policy "active users read bookings" on public.bookings for select using (
 create policy "operations manage bookings" on public.bookings for all using (public.has_role(array['OWNER','ADMIN','OPERATIONS']::public.user_role[]));
 create policy "active users read invoices" on public.invoices for select using (public.is_active_user());
 create policy "admins manage invoices" on public.invoices for all using (public.has_role(array['OWNER','ADMIN']::public.user_role[]));
+create policy "active users read invoice settings" on public.invoice_settings for select using (public.is_active_user());
+create policy "admins manage invoice settings" on public.invoice_settings for all using (public.has_role(array['OWNER','ADMIN']::public.user_role[]));
 create policy "active users read payments" on public.payments for select using (public.is_active_user());
 create policy "finance manage payments" on public.payments for all using (public.has_role(array['OWNER','ADMIN','FINANCE']::public.user_role[]));
 create policy "active users read cash accounts" on public.cash_accounts for select using (public.is_active_user());
