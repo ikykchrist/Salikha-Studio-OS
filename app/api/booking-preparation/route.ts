@@ -32,13 +32,13 @@ export async function POST(request: Request) {
               preparation_venue_ready = $3::boolean,
               preparation_backdrop_color = $4::text,
               updated_at = now()
-        where id = $1::uuid and status = 'PENDING'
+        where id = $1::uuid
         returning id, preparation_layout_ready as "layoutReady",
                   preparation_venue_ready as "venueReady",
                   preparation_backdrop_color as "backdropColor"`,
       [id, layoutReady, venueReady, color],
     );
-    if (!result.rowCount) return Response.json({ error: "Pending booking not found. Only pending bookings can be prepared." }, { status: 404 });
+    if (!result.rowCount) return Response.json({ error: "Booking not found." }, { status: 404 });
     const preparation = result.rows[0];
     return Response.json({ preparation, readyForDeployment: preparation.layoutReady && preparation.venueReady && Boolean(preparation.backdropColor) });
   } catch (error) { return Response.json({ error: error instanceof Error ? error.message : "Could not save preparation checklist." }, { status: 500 }); }
