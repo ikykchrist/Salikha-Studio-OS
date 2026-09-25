@@ -13,6 +13,11 @@ export function getLocalPostgresPool() {
     throw new Error("Development DATABASE_URL must point to localhost. Use a hosted PostgreSQL URL only in production.");
   }
 
-  pool ??= new Pool({ connectionString, max: 5, connectionTimeoutMillis: 3000, idleTimeoutMillis: 10000 });
+  pool ??= new Pool({
+    connectionString,
+    max: process.env.NODE_ENV === "production" ? 1 : 5,
+    connectionTimeoutMillis: 5000,
+    idleTimeoutMillis: 5000,
+  });
   return pool;
 }

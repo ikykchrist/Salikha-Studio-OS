@@ -53,7 +53,13 @@ class LocalQuery implements PromiseLike<QueryResult> {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(this.request),
       });
-      const result = await response.json();
+      const raw = await response.text();
+      let result: Record<string, any> = {};
+      try {
+        result = raw ? JSON.parse(raw) as Record<string, any> : {};
+      } catch {
+        return { data: null, count: null, error: { message: `Database request failed (${response.status}): ${raw.slice(0, 180) || "empty response"}` } };
+      }
       if (!response.ok) return { data: null, count: null, error: { message: result.error ?? `Local database request failed (${response.status})` } };
       const rows = Array.isArray(result.data) ? result.data : result.data == null ? [] : [result.data];
       if (this.singleResult === "single") {
