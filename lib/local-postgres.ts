@@ -9,6 +9,7 @@ export function getLocalPostgresPool() {
 
   const databaseUrl = new URL(connectionString);
   const isLoopback = ["localhost", "127.0.0.1", "::1"].includes(databaseUrl.hostname);
+  const ca = process.env.POSTGRES_CA_CERT?.replace(/\\n/g, "\n");
   if (process.env.NODE_ENV !== "production" && !isLoopback) {
     throw new Error("Development DATABASE_URL must point to localhost. Use a hosted PostgreSQL URL only in production.");
   }
@@ -18,6 +19,7 @@ export function getLocalPostgresPool() {
     max: process.env.NODE_ENV === "production" ? 1 : 5,
     connectionTimeoutMillis: 15000,
     idleTimeoutMillis: 10000,
+    ...(ca ? { ssl: { ca, rejectUnauthorized: true } } : {}),
   });
   return pool;
 }
