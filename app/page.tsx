@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import { AlertCircle, AlertTriangle, Archive, ArrowLeft, ArrowLeftRight, ArrowRight, Banknote, Bell, Boxes, CalendarDays, CalendarRange, Camera, ChartNoAxesCombined, Check, ChevronLeft, ChevronRight, CircleCheck, CircleDollarSign, ClipboardList, Clock3, Copy, Download, ExternalLink, FileBarChart, FileDown, History, LayoutDashboard, ListPlus, LogOut, Mail, MapPin, Menu, Minus, Moon, Pencil, Phone, Plus, Receipt, RefreshCw, RotateCcw, Search, Settings, ShieldCheck, Sparkles, SlidersHorizontal, Sun, TrendingDown, TrendingUp, Users, WalletCards, Wrench, X } from "lucide-react";
 import { getLocalDatabase } from "../lib/local-database";
+import { formatManilaTime } from "../lib/manila-datetime";
 import { deleteRecord } from "../lib/delete-record";
 import { DialogHost, showConfirm, showNotice } from "../lib/ui-dialogs";
 import { PackageDetailActions } from "./package-detail-actions";
@@ -262,7 +263,7 @@ function manilaDateKey(date: Date) { const parts = new Intl.DateTimeFormat("en-C
 function bookingDateInput(value: string) { if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value; const date = new Date(value); if (Number.isNaN(date.getTime())) return value.slice(0, 10); return manilaDateKey(date); }
 function bookingTimeInput(value: string | null) { return value ? (/^\d{1,2}:\d{2}/.exec(value)?.[0] || "").padStart(5, "0") : ""; }
 function bookingDateLabel(value: string) { const normalized = bookingDateInput(value); const date = new Date(`${normalized}T12:00:00+08:00`); return Number.isNaN(date.getTime()) ? normalized : new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", day: "numeric", month: "short", year: "numeric" }).format(date); }
-function bookingTimeLabel(value: string) { const match = /^(\d{1,2}):(\d{2})/.exec(value); if (!match) return value || "Time not set"; const hour = Number(match[1]); return `${hour % 12 || 12}:${match[2]} ${hour < 12 ? "AM" : "PM"}`; }
+function bookingTimeLabel(value: string) { return formatManilaTime(value) === "—" ? "Time not set" : formatManilaTime(value); }
 function normalizeBookingStatus(status: string): BookingRecord["status"] { if (status === "CANCELLED") return "CANCELLED"; if (status === "DONE" || status === "COMPLETED") return "DONE"; return "PENDING"; }
 
 function BookingsView({ isAdmin, showForm, onShowForm, onNavigate }: { isAdmin: boolean; showForm: boolean; onShowForm: (value: boolean) => void; onNavigate: (view: string) => void }) {

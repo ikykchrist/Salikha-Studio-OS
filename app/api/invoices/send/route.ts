@@ -1,5 +1,6 @@
 import { requireUser } from "../../../../lib/auth";
 import { getLocalPostgresPool } from "../../../../lib/local-postgres";
+import { formatManilaDate, formatManilaTime } from "../../../../lib/manila-datetime";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,9 +26,9 @@ export async function POST(request: Request) {
     if (invoice.status === "VOID") return Response.json({ error: "A void invoice cannot be sent." }, { status: 409 });
     const lines = invoice.line_items as Array<{ description: string; quantity: number; unitPrice: number }>;
     const bookingSnapshot = (invoice.booking_details || {}) as { eventName?: string; packageName?: string; eventDate?: string; startTime?: string; endTime?: string; venue?: string };
-    const booking = { eventName: bookingSnapshot.eventName || invoice.event_name, packageName: bookingSnapshot.packageName || invoice.package_name, eventDate: bookingSnapshot.eventDate || invoice.event_date, startTime: bookingSnapshot.startTime || invoice.start_time, endTime: bookingSnapshot.endTime || invoice.end_time, venue: bookingSnapshot.venue || invoice.venue };
-    const eventDate = booking.eventDate ? new Date(booking.eventDate).toLocaleDateString("en-PH", { month: "long", day: "numeric", year: "numeric", timeZone: "Asia/Manila" }) : "—";
-    const clock = (value?: string) => value ? new Date(`2000-01-01T${value}`).toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit", timeZone: "UTC" }) : "—";
+    const booking = { eventName: invoice.event_name || bookingSnapshot.eventName, packageName: invoice.package_name || bookingSnapshot.packageName, eventDate: invoice.event_date || bookingSnapshot.eventDate, startTime: invoice.start_time || bookingSnapshot.startTime, endTime: invoice.end_time || bookingSnapshot.endTime, venue: invoice.venue || bookingSnapshot.venue };
+    const eventDate = formatManilaDate(booking.eventDate, { month: "long", day: "numeric", year: "numeric" });
+    const clock = formatManilaTime;
     const paid = Math.min(Number(invoice.total_amount), Number(invoice.booking_paid || 0));
     const balance = Math.max(0, Number(invoice.total_amount) - paid);
     const logo = typeof invoice.logo_data_url === "string" && invoice.logo_data_url.startsWith("data:image/png;base64,") ? invoice.logo_data_url.slice("data:image/png;base64,".length) : null;

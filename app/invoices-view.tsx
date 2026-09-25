@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, ImagePlus, Mail, Plus, Printer, Receipt, Send, ShieldCheck, Trash2, X } from "lucide-react";
 import { showConfirm, showNotice } from "../lib/ui-dialogs";
+import { formatManilaDate, formatManilaTime } from "../lib/manila-datetime";
 
 type InvoiceLine = { description: string; quantity: number; unitPrice: number };
 type Booking = { id: string; client_id: string; event_name: string; event_date: string; start_time: string | null; end_time: string | null; venue: string | null; total_amount: number; downpayment_amount: number; paid_amount: number; status: string; client_name: string; client_email: string | null; package_name: string | null };
@@ -11,8 +12,8 @@ type Invoice = { id: string; invoice_number: string; client_id: string; booking_
 const peso = (value: number) => `₱${Number(value || 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila" }).format(new Date());
 const addDays = (value: string, days: number) => { const date = new Date(`${value}T12:00:00`); date.setDate(date.getDate() + days); return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila" }).format(date); };
-const dateLabel = (value: string | null) => value ? new Date(`${value.slice(0, 10)}T12:00:00`).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric", timeZone: "Asia/Manila" }) : "—";
-const timeLabel = (value: string | null | undefined) => value ? new Date(`2000-01-01T${value}`).toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit", timeZone: "UTC" }) : "—";
+const dateLabel = (value: string | null) => formatManilaDate(value, { month: "short", day: "numeric", year: "numeric" });
+const timeLabel = formatManilaTime;
 
 export function InvoicesView() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -103,7 +104,7 @@ function InvoicePreview({ invoice, logoDataUrl, emailReady, working, onSend, onV
   const paid = invoice.booking_id ? Math.min(Number(invoice.total_amount), Number(invoice.booking_paid || 0)) : 0;
   const due = Math.max(0, Number(invoice.total_amount) - paid);
   const label = invoice.status === "SENT" && due === 0 ? "PAID" : invoice.status === "SENT" && invoice.due_date && invoice.due_date < today() ? "OVERDUE" : invoice.status;
-  const event = { ...(invoice.booking_details || {}), eventName: invoice.booking_details?.eventName || invoice.event_name, packageName: invoice.booking_details?.packageName || invoice.package_name, eventDate: invoice.booking_details?.eventDate || invoice.event_date, startTime: invoice.booking_details?.startTime || invoice.start_time, endTime: invoice.booking_details?.endTime || invoice.end_time, venue: invoice.booking_details?.venue || invoice.venue };
+  const event = { eventName: invoice.event_name || invoice.booking_details?.eventName, packageName: invoice.package_name || invoice.booking_details?.packageName, eventDate: invoice.event_date || invoice.booking_details?.eventDate || null, startTime: invoice.start_time || invoice.booking_details?.startTime, endTime: invoice.end_time || invoice.booking_details?.endTime, venue: invoice.venue || invoice.booking_details?.venue };
   return <aside className="invoice-preview panel"><div className="invoice-preview-toolbar"><span className={`invoice-status ${label.toLowerCase()}`}>{label}</span><div className="invoice-actions"><button className="secondary-button" type="button" onClick={() => window.print()}><Printer aria-hidden="true" /> Print / PDF</button>{invoice.status !== "VOID" && invoice.status !== "PAID" && <button className="primary-button" type="button" onClick={onSend} disabled={working || !emailReady || !invoice.client_email}>{working ? "Sending…" : <><Send aria-hidden="true" /> Send invoice</>}</button>}</div></div>
     <article className="invoice-paper" id="printable-invoice"><header className="invoice-paper-head"><div className="invoice-brand-lockup">{logoDataUrl ? <img className="invoice-paper-logo" src={logoDataUrl} alt="Salikha Studio logo" /> : <span className="invoice-brand-mark">S</span>}<div><strong>Salikha Studio</strong><small>Event Photo Services</small></div></div><div className="invoice-heading"><span>INVOICE</span><strong>{invoice.invoice_number}</strong></div></header>
       <div className="invoice-meta"><div className="invoice-bill-to"><small>Bill to</small><strong>{invoice.client_name}</strong><span>{invoice.client_email || "No client email"}</span></div><div className="invoice-meta-dates"><div><small>Invoice date</small><strong>{dateLabel(invoice.issue_date)}</strong></div><div className="invoice-due-date"><small>Due date</small><strong>{dateLabel(invoice.due_date)}</strong></div></div></div>
