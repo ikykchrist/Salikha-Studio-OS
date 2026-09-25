@@ -26,10 +26,10 @@ export async function POST(request: Request) {
     if (!found.rowCount) { await client.query("rollback"); return Response.json({ error: "Record not found." }, { status: 404 }); }
 
     if (table === "clients") {
-      const linked = await client.query("select exists (select 1 from public.bookings where client_id = $1::uuid) as linked", [id]);
+      const linked = await client.query("select exists (select 1 from public.bookings where client_id = $1::uuid) or exists (select 1 from public.invoices where client_id = $1::uuid) as linked", [id]);
       if (linked.rows[0].linked) {
         await client.query("rollback");
-        return Response.json({ error: "This client cannot be deleted because booking history is linked to it. Keep the client record or remove the linked bookings first." }, { status: 409 });
+        return Response.json({ error: "This client cannot be deleted because booking or invoice history is linked to it. Keep the client record or resolve the linked records first." }, { status: 409 });
       }
     }
 

@@ -15,6 +15,7 @@ import { BookingPreparationForm } from "./booking-preparation-form";
 import { MaintenanceActionForm } from "./maintenance-action-form";
 import { GoogleCalendarControls } from "./google-calendar-controls";
 import { GoogleCalendarSettings as GoogleCalendarSetupSettings } from "./google-calendar-settings";
+import { InvoicesView } from "./invoices-view";
 
 const navigation = [
   ["Overview", LayoutDashboard], ["Bookings", ClipboardList], ["Clients", Users],
@@ -56,7 +57,7 @@ export default function Home() {
 
   useEffect(() => {
     const storedView = window.localStorage.getItem("salikha-active-view");
-    const validViews = navigation.map(([label]) => label).concat("Settings", "Team");
+    const validViews = navigation.map(([label]) => label).concat("Invoices", "Settings", "Team");
     if (storedView && validViews.includes(storedView)) setActiveView(storedView);
     setViewRestored(true);
     const timer = window.setTimeout(() => setLoading(false), 650);
@@ -145,6 +146,7 @@ export default function Home() {
   const readyChecks = healthChecks.filter((item) => readiness[item.key]).length;
 
   if (!authChecked || !authUser) return <LoadingScreen label="Checking secure session" />;
+  const workspaceNavigation = authUser.role === "ADMIN" ? [...navigation, ["Invoices", Receipt] as const] : navigation;
 
   return (
     <div className="app-shell">
@@ -160,8 +162,8 @@ export default function Home() {
 
         <div className="workspace-label">Workspace</div>
         <nav aria-label="Main navigation">
-          {navigation.map(([label, Icon], index) => (
-            <button className={`nav-item ${activeView === label || (activeView === "Overview" && index === 0) ? "active" : ""}`} key={label} type="button" onClick={() => { setActiveView(["Bookings", "Clients", "Calendar", "Cashflow", "Expenses", "Inventory", "Equipment", "Packages", "Reports"].includes(label) ? label : "Overview"); setSidebarOpen(false); }}>
+          {workspaceNavigation.map(([label, Icon], index) => (
+            <button className={`nav-item ${activeView === label || (activeView === "Overview" && index === 0) ? "active" : ""}`} key={label} type="button" onClick={() => { setActiveView(["Bookings", "Clients", "Calendar", "Cashflow", "Expenses", "Inventory", "Equipment", "Packages", "Reports", "Invoices"].includes(label) ? label : "Overview"); setSidebarOpen(false); }}>
               <Icon className="nav-icon" aria-hidden="true" />
               <span>{label}</span>
             </button>
@@ -192,7 +194,7 @@ export default function Home() {
         </header>
 
         <div className="page-content" key={activeView}>
-           {activeView === "Team" && authUser.role === "ADMIN" ? <TeamView currentUser={authUser} /> : activeView === "Bookings" ? <BookingsView isAdmin={authUser.role === "ADMIN"} showForm={showBookingForm} onShowForm={setShowBookingForm} onNavigate={setActiveView} /> : activeView === "Clients" ? <ClientsView /> : activeView === "Calendar" ? <CalendarView /> : activeView === "Cashflow" ? <CashflowView /> : activeView === "Expenses" ? <ExpensesView /> : activeView === "Inventory" ? <InventoryView onNavigate={setActiveView} /> : activeView === "Equipment" ? <EquipmentView /> : activeView === "Packages" ? <PackagesView onNavigate={setActiveView} onCreateBooking={() => { setActiveView("Bookings"); setShowBookingForm(true); }} /> : activeView === "Reports" ? <ReportsView /> : activeView === "Settings" ? <SettingsView user={authUser} /> : <>
+           {activeView === "Team" && authUser.role === "ADMIN" ? <TeamView currentUser={authUser} /> : activeView === "Invoices" && authUser.role === "ADMIN" ? <InvoicesView /> : activeView === "Bookings" ? <BookingsView isAdmin={authUser.role === "ADMIN"} showForm={showBookingForm} onShowForm={setShowBookingForm} onNavigate={setActiveView} /> : activeView === "Clients" ? <ClientsView /> : activeView === "Calendar" ? <CalendarView /> : activeView === "Cashflow" ? <CashflowView /> : activeView === "Expenses" ? <ExpensesView /> : activeView === "Inventory" ? <InventoryView onNavigate={setActiveView} /> : activeView === "Equipment" ? <EquipmentView /> : activeView === "Packages" ? <PackagesView onNavigate={setActiveView} onCreateBooking={() => { setActiveView("Bookings"); setShowBookingForm(true); }} /> : activeView === "Reports" ? <ReportsView /> : activeView === "Settings" ? <SettingsView user={authUser} /> : <>
           <section className="page-heading">
             <div>
               <p className="eyebrow">{todayLabel}</p>
