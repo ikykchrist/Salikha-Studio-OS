@@ -16,8 +16,8 @@ export function getLocalPostgresPool() {
   pool ??= new Pool({
     connectionString,
     max: process.env.NODE_ENV === "production" ? 1 : 5,
-    connectionTimeoutMillis: 5000,
-    idleTimeoutMillis: 5000,
+    connectionTimeoutMillis: 15000,
+    idleTimeoutMillis: 10000,
   });
   return pool;
 }
