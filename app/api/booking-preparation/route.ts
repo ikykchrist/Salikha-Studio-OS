@@ -4,6 +4,15 @@ import { getLocalPostgresPool } from "../../../lib/local-postgres";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+async function ensurePreparationColumns() {
+  await getLocalPostgresPool().query(`
+    alter table public.bookings
+      add column if not exists preparation_layout_ready boolean not null default false,
+      add column if not exists preparation_venue_ready boolean not null default false,
+      add column if not exists preparation_backdrop_color text
+  `);
+}
+
 export async function POST(request: Request) {
   const auth = await requireUser(request, true);
   if (auth.response) return auth.response;
@@ -16,6 +25,7 @@ export async function POST(request: Request) {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) return Response.json({ error: "A valid booking ID is required." }, { status: 400 });
   if (color && (color.length > 80 || /[\u0000-\u001f]/.test(color))) return Response.json({ error: "Backdrop color must be 80 characters or fewer." }, { status: 400 });
   try {
+    await ensurePreparationColumns();
     const result = await getLocalPostgresPool().query(
       `update public.bookings
           set preparation_layout_ready = $2::boolean,
