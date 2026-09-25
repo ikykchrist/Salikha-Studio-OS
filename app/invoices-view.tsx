@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, ImagePlus, Mail, Plus, Printer, Receipt, Send, ShieldCheck, Trash2, X } from "lucide-react";
+import { ArrowRight, ImagePlus, LockKeyhole, Mail, Plus, Printer, Receipt, RefreshCw, Send, ShieldCheck, Trash2, X } from "lucide-react";
 import { showConfirm, showNotice } from "../lib/ui-dialogs";
 import { formatManilaDate, formatManilaTime } from "../lib/manila-datetime";
 
@@ -27,6 +27,10 @@ export function InvoicesView() {
   const [workingId, setWorkingId] = useState("");
   const [search, setSearch] = useState("");
   const [logoBusy, setLogoBusy] = useState(false);
+  const [deleteVoidsOpen, setDeleteVoidsOpen] = useState(false);
+  const [adminPassword, setAdminPassword] = useState("");
+  const [maintenanceError, setMaintenanceError] = useState("");
+  const [maintenanceBusy, setMaintenanceBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const reload = async () => {
@@ -48,6 +52,7 @@ export function InvoicesView() {
   const selected = visible.find((invoice) => invoice.id === selectedId) || invoices.find((invoice) => invoice.id === selectedId) || null;
   const outstanding = invoices.filter((invoice) => invoice.status === "SENT").reduce((sum, invoice) => sum + Math.max(0, Number(invoice.total_amount) - Number(invoice.booking_paid || 0)), 0);
   const statusOf = (invoice: Invoice) => invoice.status === "SENT" && invoice.booking_id && Number(invoice.booking_paid || 0) >= Number(invoice.total_amount) ? "PAID" : invoice.status === "SENT" && invoice.due_date && invoice.due_date < today() ? "OVERDUE" : invoice.status;
+  const voidCount = invoices.filter((invoice) => invoice.status === "VOID").length;
   const saveLogo = async (logo: string | null) => {
     setLogoBusy(true);
     try {
@@ -84,10 +89,26 @@ export function InvoicesView() {
     catch (error) { await showNotice(error instanceof Error ? error.message : "Invoice could not be voided.", "Could not void invoice"); }
     finally { setWorkingId(""); }
   };
+  const refreshBookingDetails = async () => {
+    if (!await showConfirm("Refresh linked invoice event details from the current booking records? Invoice numbers, totals, payments, due dates, and statuses will stay unchanged.", { title: "Refresh invoice details", confirmLabel: "Refresh details" })) return;
+    setMaintenanceBusy(true);
+    try { const response = await fetch("/api/invoices/maintenance", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "sync-booking-details" }) }); const result = await response.json(); if (!response.ok) throw new Error(result.error || "Invoice details could not be refreshed."); await reload(); await showNotice(`${result.updated} linked invoice${result.updated === 1 ? " was" : "s were"} refreshed from current booking details. Financial values were not changed.`, "Invoices refreshed"); }
+    catch (error) { await showNotice(error instanceof Error ? error.message : "Invoice details could not be refreshed.", "Refresh failed"); }
+    finally { setMaintenanceBusy(false); }
+  };
+  const deleteVoidedInvoices = async () => {
+    setMaintenanceError("");
+    if (!adminPassword) { setMaintenanceError("Enter your administrator password to continue."); return; }
+    setMaintenanceBusy(true);
+    try { const response = await fetch("/api/invoices/maintenance", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "delete-void", adminPassword }) }); const result = await response.json(); if (!response.ok) throw new Error(result.error || "Void invoices could not be deleted."); setDeleteVoidsOpen(false); setAdminPassword(""); setSelectedId((id) => invoices.some((invoice) => invoice.id === id && invoice.status === "VOID") ? null : id); await reload(); await showNotice(`${result.deleted} void invoice${result.deleted === 1 ? " was" : "s were"} permanently deleted. Other invoices were untouched.`, "Void invoices deleted"); }
+    catch (error) { setMaintenanceError(error instanceof Error ? error.message : "Void invoices could not be deleted."); }
+    finally { setMaintenanceBusy(false); }
+  };
 
   return <>
     <section className="page-heading"><div><p className="eyebrow">Finance / Receivables</p><h1>Invoices</h1><p className="subheading">Generate accurate invoices directly from bookings, then send or print them.</p></div><button className="primary-button" type="button" onClick={() => setFormOpen(true)} disabled={!bookings.length}><Plus aria-hidden="true" /> New invoice</button></section>
     <section className="invoice-branding panel"><div className="invoice-branding-copy"><span className="eyebrow">Invoice branding</span><strong>{logoDataUrl ? "Your saved logo is active" : "Use your studio logo on every invoice"}</strong><small>PNG · Maximum 1 MB · stored in the studio database</small></div>{logoDataUrl && <img className="invoice-branding-preview" src={logoDataUrl} alt="Saved invoice logo preview" />}{logoDataUrl && <button className="secondary-button" type="button" disabled={logoBusy} onClick={() => void saveLogo(null)}><Trash2 aria-hidden="true" /> Remove</button>}<input ref={fileRef} type="file" accept="image/png,.png" hidden onChange={(event) => void uploadLogo(event.target.files?.[0])} /><button className="secondary-button" type="button" disabled={logoBusy} onClick={() => fileRef.current?.click()}><ImagePlus aria-hidden="true" />{logoBusy ? "Saving…" : logoDataUrl ? "Change logo" : "Upload PNG logo"}</button></section>
+    <section className="invoice-maintenance panel"><div><p className="eyebrow">Invoice maintenance</p><strong>Keep invoices aligned with booking records</strong><small>Refreshing changes event details only. Financial values stay as issued.</small></div><div className="invoice-maintenance-actions"><button className="secondary-button" type="button" onClick={() => void refreshBookingDetails()} disabled={maintenanceBusy}><RefreshCw aria-hidden="true" /> Refresh invoice details</button><button className="secondary-button danger-button" type="button" onClick={() => { setAdminPassword(""); setMaintenanceError(""); setDeleteVoidsOpen(true); }} disabled={maintenanceBusy || voidCount === 0}><Trash2 aria-hidden="true" /> Delete void invoices ({voidCount})</button></div></section>
     <section className="invoice-metrics"><article className="metric-card"><span>Total invoices</span><strong>{invoices.length}</strong><small>Saved in this workspace</small></article><article className="metric-card"><span>Drafts</span><strong>{invoices.filter((invoice) => invoice.status === "DRAFT").length}</strong><small>Ready for review</small></article><article className="metric-card"><span>Sent and outstanding</span><strong>{peso(outstanding)}</strong><small>Linked booking payments reflected</small></article><article className="metric-card"><span>Overdue</span><strong>{invoices.filter((invoice) => statusOf(invoice) === "OVERDUE").length}</strong><small>Past the due date</small></article></section>
     {!emailReady && <div className="invoice-email-setup"><Mail aria-hidden="true" /><span><strong>Email sending needs setup.</strong> Configure <code>RESEND_API_KEY</code> and <code>INVOICE_FROM_EMAIL</code> on the app server. Creation, logo saving, and printing work independently.</span></div>}
     {loadError && <p className="form-warning" role="alert">{loadError}</p>}
@@ -96,6 +117,7 @@ export function InvoicesView() {
       {selected ? <InvoicePreview invoice={selected} logoDataUrl={logoDataUrl} emailReady={emailReady} working={workingId === selected.id} onSend={() => void send(selected)} onVoid={() => void voidInvoice(selected)} /> : <aside className="invoice-preview panel invoice-preview-empty"><span className="invoice-paper-icon"><Receipt aria-hidden="true" /></span><h2>Select an invoice</h2><p>Choose a row to review, send by email, or print.</p></aside>}
     </section>
     {formOpen && <InvoiceForm bookings={bookings} onClose={() => setFormOpen(false)} onSave={async (payload) => { const response = await fetch("/api/invoices", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) }); const result = await response.json(); if (!response.ok) throw new Error(result.error || "Invoice could not be generated."); setFormOpen(false); await reload(); setSelectedId(result.invoice.id); await showNotice(`${result.invoice.invoice_number} was generated from the booking.`, "Invoice created"); }} />}
+    {deleteVoidsOpen && <div className="invoice-maintenance-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !maintenanceBusy) setDeleteVoidsOpen(false); }}><section className="invoice-maintenance-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-void-invoices-title"><div className="admin-override-icon"><LockKeyhole aria-hidden="true" /></div><p className="eyebrow">Administrator authorization</p><h2 id="delete-void-invoices-title">Delete {voidCount} void invoice{voidCount === 1 ? "" : "s"}?</h2><p>This permanently removes only invoices marked VOID. Active, sent, and paid invoices will remain unchanged.</p><label>Admin password<input autoFocus type="password" autoComplete="current-password" value={adminPassword} onChange={(event) => { setAdminPassword(event.target.value); setMaintenanceError(""); }} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void deleteVoidedInvoices(); } }} aria-invalid={Boolean(maintenanceError)} /></label>{maintenanceError && <p className="form-warning" role="alert">{maintenanceError}</p>}<div className="admin-override-actions"><button className="secondary-button" type="button" onClick={() => setDeleteVoidsOpen(false)} disabled={maintenanceBusy}>Cancel</button><button className="app-dialog-danger-button" type="button" onClick={() => void deleteVoidedInvoices()} disabled={maintenanceBusy || !adminPassword}>{maintenanceBusy ? "Verifying…" : "Verify & delete void invoices"}</button></div></section></div>}
   </>;
 }
 

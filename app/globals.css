@@ -572,6 +572,22 @@ button:not(:disabled):active { transform: scale(.985); }
 .invoice-branding-copy small { color:var(--muted); font-size:10px; }
 .invoice-branding-preview { background:#fff; border:1px solid var(--line); border-radius:7px; height:44px; max-width:120px; object-fit:contain; padding:4px; }
 .invoice-branding .secondary-button { min-height:35px; }
+.invoice-maintenance { align-items:center; display:flex; flex-wrap:wrap; gap:14px; justify-content:space-between; margin-bottom:14px; min-height:0; padding:13px 16px; }
+.invoice-maintenance > div:first-child { display:grid; flex:1 1 250px; gap:4px; }
+.invoice-maintenance .eyebrow { margin:0; }
+.invoice-maintenance strong { color:var(--ink); font-size:12px; }
+.invoice-maintenance small { color:var(--muted); font-size:10px; }
+.invoice-maintenance-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.invoice-maintenance-actions .secondary-button { min-height:35px; }
+.invoice-maintenance-backdrop { align-items:center; background:rgb(17 18 24 / 48%); display:flex; inset:0; justify-content:center; padding:18px; position:fixed; z-index:110; }
+.invoice-maintenance-dialog { animation:invoice-drawer-in .18s ease-out both; background:var(--surface); border:1px solid var(--line); border-radius:14px; box-shadow:0 24px 80px rgb(20 20 30 / 24%); display:grid; gap:10px; max-width:440px; padding:25px; width:100%; }
+.invoice-maintenance-dialog .admin-override-icon { align-items:center; background:var(--danger-soft); border-radius:50%; color:var(--danger); display:flex; height:42px; justify-content:center; width:42px; }
+.invoice-maintenance-dialog h2 { color:var(--ink); font-size:19px; margin:0; }
+.invoice-maintenance-dialog > p:not(.eyebrow) { color:var(--muted); font-size:12px; line-height:1.6; margin:0; }
+.invoice-maintenance-dialog .eyebrow { margin:0; }
+.invoice-maintenance-dialog label { color:var(--ink); display:grid; font-size:11px; font-weight:600; gap:7px; margin-top:5px; }
+.invoice-maintenance-dialog input { background:var(--surface); border:1px solid var(--line); border-radius:7px; color:var(--ink); min-height:42px; padding:0 11px; }
+.invoice-maintenance-dialog .admin-override-actions { display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; margin-top:7px; }
 .invoice-brand-lockup { align-items:center; display:flex; gap:11px; min-width:0; }
 .invoice-paper-logo { height:auto; max-height:82px; max-width:220px; object-fit:contain; }
 .invoice-event-link { align-items:flex-start; flex-direction:column; gap:5px; }
