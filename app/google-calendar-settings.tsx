@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { CalendarRange, Check, ExternalLink, Save } from "lucide-react";
 
 export function GoogleCalendarSettings() {
+  const [hosted, setHosted] = useState(false);
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
   const [redirectUri, setRedirectUri] = useState("");
@@ -22,7 +23,7 @@ export function GoogleCalendarSettings() {
     ]).then(([config, status]) => {
       if (cancelled) return;
       if (config.error) throw new Error(config.error);
-      setClientId(config.clientId || "");
+      setHosted(Boolean(config.hosted)); setClientId(config.clientId || "");
       setConfigured(Boolean(config.configured)); setRedirectUri(config.redirectUri);
       setConnected(Boolean(status.connected)); setAccount(status.connection?.account_email || "");
     }).catch((cause) => { if (!cancelled) setError(cause instanceof Error ? cause.message : "Could not load Google Calendar settings."); });
@@ -44,13 +45,13 @@ export function GoogleCalendarSettings() {
     <div className="settings-card-icon"><CalendarRange aria-hidden="true" /></div>
     <div><p className="eyebrow">Integration setup</p><h2>Google Calendar</h2><p>{connected ? "Connected account: " + account : "Enter your OAuth web-client details here. The client secret is stored only in the local ignored config file and never returned to the browser."}</p></div>
     <span className={"settings-status " + (connected ? "ready" : configured ? "ready" : "pending")}>{connected ? "Connected" : configured ? "Credentials saved" : "Setup required"}</span>
-    <form className="google-oauth-form" onSubmit={save}>
+    {hosted ? <div><p>Connect the studio account salikhaprintco@gmail.com. OAuth credentials are configured as server-only Vercel environment variables.</p><p className="workflow-help">Redirect URI: {redirectUri}</p>{configured ? <a className="primary-button" href="/api/google-calendar/connect"><ExternalLink size={16} />Connect Google account</a> : <p role="status">Setup required: Google OAuth client ID, client secret, token encryption key and production redirect URI.</p>}</div> : <form className="google-oauth-form" onSubmit={save}>
       <label>OAuth client ID<input value={clientId} onChange={(event) => setClientId(event.target.value)} placeholder={configured ? "Enter to replace saved client ID" : "…apps.googleusercontent.com"} autoComplete="off" required /></label>
       <label>OAuth client secret<input type="password" value={clientSecret} onChange={(event) => setClientSecret(event.target.value)} placeholder={configured ? "Saved securely · leave blank to keep current" : "Paste client secret"} autoComplete="new-password" required={!configured} /></label>
       <label className="wide-field">Authorized redirect URI (add this exact URL in Google Cloud)<input value={redirectUri || (typeof window !== "undefined" ? window.location.origin + "/api/google-calendar/callback" : "")} readOnly /></label>
       <small className="google-oauth-help">Google Cloud Console → enable Google Calendar API → OAuth consent screen → add your Google account as a test user → OAuth Client → Authorized redirect URIs.</small>
       {error && <p className="form-warning google-oauth-feedback" role="alert">{error}</p>}{notice && <p className="google-calendar-message google-oauth-feedback" role="status"><Check aria-hidden="true" />{notice}</p>}
       <div className="google-oauth-actions"><button className="primary-button" type="submit" disabled={saving}>{saving ? "Saving…" : <><Save aria-hidden="true" /> Save OAuth settings</>}</button>{configured && <a className="secondary-button" href="/api/google-calendar/connect"><ExternalLink aria-hidden="true" /> {connected ? "Reconnect Google account" : "Connect Google account"}</a>}</div>
-    </form>
+    </form>}
   </article>;
 }

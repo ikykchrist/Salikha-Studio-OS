@@ -19,8 +19,9 @@ function localOrigin(request: Request) {
 export async function GET(request: Request) {
   const auth = await requireUser(request, true); if (auth.response) return auth.response;
   try {
-    const origin = localOrigin(request);
+    const origin = new URL(request.url).origin;
     return Response.json({
+      hosted: !["localhost", "127.0.0.1"].includes(new URL(origin).hostname),
       configured: googleCalendarConfigured(),
       clientId: process.env.GOOGLE_CALENDAR_CLIENT_ID || "",
       clientIdConfigured: Boolean(process.env.GOOGLE_CALENDAR_CLIENT_ID),

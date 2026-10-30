@@ -1,0 +1,11 @@
+import {requireUser} from '../../../lib/auth';
+import {getLocalPostgresPool} from '../../../lib/local-postgres';
+import {uuid,validDate} from '../../../lib/workflow-validation';
+export const runtime='nodejs';
+export const dynamic='force-dynamic';
+export async function GET(request:Request){const auth=await requireUser(request);if(auth.response)return auth.response;try{const rows=await getLocalPostgresPool().query(`select a.*,a.due_date::text as due_date,c.display_name as client_name from public.client_activities a join public.clients c on c.id=a.client_id order by a.due_date nulls last,a.created_at desc`);return Response.json({activities:rows.rows});}catch{return Response.json({error:'Could not load follow-ups. Check workflow migration 018.'},{status:503});}}
+export async function POST(request:Request){const auth=await requireUser(request);if(auth.response)return auth.response;const body=await request.json().catch(()=>null);if(!body||!uuid(body.id))return Response.json({error:'A valid activity ID is required.'},{status:400});const db=await getLocalPostgresPool().connect();try{await db.query('begin');
+ if(body.action==='COMPLETE'){const row=await db.query('update public.client_activities set completed_at=coalesce(completed_at,now()) where id=$1 returning id',[body.id]);if(!row.rowCount)throw Error('Activity not found.');}
+ else{if(!uuid(body.clientId)||!['NOTE','CALL','EMAIL','CHAT','FOLLOW_UP'].includes(body.kind)||!String(body.summary||'').trim()||(body.dueDate&&!validDate(body.dueDate))||(body.kind==='FOLLOW_UP'&&!validDate(body.dueDate)))throw Error('Choose a client, activity, summary and valid follow-up date.');await db.query(`insert into public.client_activities(id,client_id,kind,summary,due_date,created_by) values($1,$2,$3,$4,$5,$6) on conflict(id) do nothing`,[body.id,body.clientId,body.kind,String(body.summary).trim().slice(0,4000),body.dueDate||null,auth.user!.id]);}
+ await db.query("insert into public.audit_logs(actor_id,action,entity_type,entity_id) values($1,$2,'client_activities',$3)",[auth.user!.id,body.action==='COMPLETE'?'FOLLOW_UP_COMPLETE':'CLIENT_ACTIVITY',body.id]);await db.query('commit');return Response.json({ok:true});
+ }catch(e){await db.query('rollback').catch(()=>{});return Response.json({error:e instanceof Error?e.message:'Could not save activity.'},{status:400});}finally{db.release();}}

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./workflow.css";
 import { PwaRegister } from "./pwa-register";
 
 export const metadata: Metadata = {

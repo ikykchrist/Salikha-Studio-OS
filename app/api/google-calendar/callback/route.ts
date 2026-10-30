@@ -1,10 +1,13 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { encryptGoogleToken, googleCalendarConfigured } from "../../../../lib/google-calendar";
 import { getLocalPostgresPool } from "../../../../lib/local-postgres";
+import { requireUser } from '../../../../lib/auth';
+import { calendarOrigin } from '../../../../lib/google-calendar-origin';
 
 export const runtime = "nodejs";
 export async function GET(request: Request) {
-  const origin = process.env.APP_ORIGIN || "http://localhost:3000";
+  const auth=await requireUser(request,true);if(auth.response)return auth.response;
+  let origin:string;try{origin=calendarOrigin();}catch{return Response.json({error:'Configure APP_ORIGIN.'},{status:503});}
   const url = new URL(request.url); const state = url.searchParams.get("state") || ""; const code = url.searchParams.get("code"); const oauthError = url.searchParams.get("error");
   const cookie = request.headers.get("cookie")?.match(/(?:^|;\s*)salikha_google_oauth_state=([^;]+)/)?.[1] || "";
   const clearCookie = "salikha_google_oauth_state=; HttpOnly; SameSite=Lax; Path=/api/google-calendar/callback; Max-Age=0";

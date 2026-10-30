@@ -1,85 +1,23 @@
-import { getLocalPostgresPool } from "../../../lib/local-postgres";
-import { requireUser } from "../../../lib/auth";
-import type { PoolClient } from "pg";
-import { googleCalendarConfigured, syncGoogleCalendar } from "../../../lib/google-calendar";
-
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
-
-const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const moneyPattern = /^\d{1,10}(?:\.\d{1,2})?$/;
-
-export async function POST(request: Request) {
-  const auth = await requireUser(request);
-  if (auth.response) return auth.response;
-  let body: Record<string, unknown>;
-  try { body = await request.json(); } catch { return Response.json({ error: "Request body must be valid JSON." }, { status: 400 }); }
-  const { id, eventName, date, startTime, endTime, venue, mapsUrl, packageName, total, downpaymentAmount, status } = body;
-  if (typeof id !== "string" || !uuidPattern.test(id)) return Response.json({ error: "A valid booking ID is required." }, { status: 400 });
-  if (typeof eventName !== "string" || !eventName.trim() || typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return Response.json({ error: "Event name and date are required." }, { status: 400 });
-  if (!moneyPattern.test(String(total ?? "")) || !moneyPattern.test(String(downpaymentAmount ?? ""))) return Response.json({ error: "Enter valid total and downpayment amounts." }, { status: 400 });
-  const totalValue = Number(total);
-  const downpayment = Number(downpaymentAmount);
-  if (downpayment > totalValue) return Response.json({ error: "Downpayment cannot exceed the booking total." }, { status: 400 });
-  if (status !== "PENDING" && status !== "DONE" && status !== "CANCELLED") return Response.json({ error: "Choose a valid booking status." }, { status: 400 });
-  if (mapsUrl != null && (typeof mapsUrl !== "string" || (mapsUrl !== "" && !/^https?:\/\//i.test(mapsUrl)))) return Response.json({ error: "Enter a valid http or https Google Maps URL." }, { status: 400 });
-
-  const client: PoolClient = await getLocalPostgresPool().connect();
-  try {
-    await client.query("begin");
-    const currentResult = await client.query("select id from public.bookings where id = $1::uuid for update", [id]);
-    if (!currentResult.rowCount) { await client.query("rollback"); return Response.json({ error: "Booking not found." }, { status: 404 }); }
-    await client.query(
-      `update public.bookings
-          set event_name = $2, event_date = $3::date, start_time = nullif($4, '')::time,
-              end_time = nullif($5, '')::time, venue = nullif($6, ''), maps_url = nullif($10, ''),
-              total_amount = $7::numeric(12,2), downpayment_amount = $8::numeric(12,2),
-              paid_amount = case when $9::public.booking_status = 'DONE' then $7::numeric(12,2) else $8::numeric(12,2) end,
-              status = $9::public.booking_status,
-              cashflow_posted_at = case when $9::public.booking_status = 'DONE' then now() else null end,
-              updated_at = now()
-        where id = $1::uuid`,
-      [id, eventName.trim(), date, String(startTime || ""), String(endTime || ""), String(venue || ""), totalValue, downpayment, status, String(mapsUrl || "")],
-    );
-
-    const downRef = `booking-completion:${id}:downpayment`;
-    const balanceRef = `booking-completion:${id}:balance`;
-    if (status === "DONE") {
-      const accountResult = await client.query(
-        "insert into public.cash_accounts (name, opening_balance, is_active) values ('Cash on hand', 0, true) on conflict (name) do update set is_active = true, updated_at = now() returning id",
-      );
-      const accountId = accountResult.rows[0].id;
-      const balance = Math.max(0, Math.round((totalValue - downpayment) * 100) / 100);
-      const transactions = [
-        { reference: downRef, amount: downpayment, description: `Downpayment received — ${eventName.trim()}` },
-        { reference: balanceRef, amount: balance, description: `Booking balance received — ${eventName.trim()}` },
-      ];
-      for (const transaction of transactions) {
-        if (transaction.amount <= 0) {
-          await client.query("update public.cash_transactions set status = 'VOIDED' where reference = $1", [transaction.reference]);
-          continue;
-        }
-        const existing = await client.query("select id from public.cash_transactions where reference = $1 limit 1", [transaction.reference]);
-        if (existing.rowCount) {
-          await client.query("update public.cash_transactions set account_id = $2, transaction_date = $3::date, amount = $4, description = $5, status = 'POSTED' where id = $1", [existing.rows[0].id, accountId, date, transaction.amount, transaction.description]);
-        } else {
-          await client.query("insert into public.cash_transactions (account_id, transaction_date, type, description, amount, direction, status, reference) values ($1, $2::date, 'Booking payment', $3, $4, 'INFLOW', 'POSTED', $5)", [accountId, date, transaction.description, transaction.amount, transaction.reference]);
-        }
-      }
-    } else {
-      await client.query("update public.cash_transactions set status = 'VOIDED' where reference in ($1, $2)", [downRef, balanceRef]);
-    }
-
-    const saved = await client.query("select id, total_amount as total, paid_amount as \"paidAmount\", downpayment_amount as \"downpaymentAmount\", status from public.bookings where id = $1::uuid", [id]);
-    await client.query("commit");
-    let calendarSync: unknown = null;
-    if (googleCalendarConfigured()) {
-      try { calendarSync = await syncGoogleCalendar(); }
-      catch (error) { calendarSync = { error: error instanceof Error ? error.message : "Calendar sync failed." }; }
-    }
-    return Response.json({ booking: saved.rows[0], calendarSync });
-  } catch (error) {
-    await client.query("rollback").catch(() => undefined);
-    return Response.json({ error: error instanceof Error ? error.message : "Could not save the booking." }, { status: 500 });
-  } finally { client.release(); }
+import { after } from 'next/server';
+import { googleCalendarConfigured, syncGoogleCalendar } from '../../../lib/google-calendar';
+import { getLocalPostgresPool } from '../../../lib/local-postgres';
+import { requireUser } from '../../../lib/auth';
+import { cents,uuid,validDate } from '../../../lib/workflow-validation';
+export const runtime='nodejs';
+export async function POST(request:Request){
+ const auth=await requireUser(request);if(auth.response)return auth.response;
+ const body=await request.json().catch(()=>null);
+ if(!body||!uuid(body.id)||!validDate(body.date)||!String(body.eventName||'').trim()||!['PENDING','DONE','CANCELLED'].includes(body.status))return Response.json({error:'Enter a valid booking, date, event and status.'},{status:400});
+ const db=await getLocalPostgresPool().connect();
+ try{
+  const total=cents(body.total);await db.query('begin');
+  const found=await db.query('select *,event_date::text as saved_date from public.bookings where id=$1 for update',[body.id]);const current=found.rows[0];if(!current)throw Error('Booking not found.');
+  if(total<Math.round(Number(current.paid_amount)*100))throw Error('The total cannot be less than recorded payments. Review and void an incorrect payment first.');
+  if(body.status==='DONE'&&Math.round(Number(current.paid_amount)*100)<total)throw Error('Full payment is required before completion. Record the actual payment in Cashflow or use Collect payment.');
+  if(current.status==='DONE'&&(total!==Math.round(Number(current.total_amount)*100)||body.date!==current.saved_date)&&body.status==='DONE')throw Error('Reopen the completed booking before changing its value or event date.');
+  if(body.mapsUrl&&!/^https?:\/\//i.test(String(body.mapsUrl)))throw Error('Enter a valid map URL.');
+  const saved=await db.query(`update public.bookings set event_name=$2,event_date=$3,start_time=nullif($4,'')::time,end_time=nullif($5,'')::time,venue=nullif($6,''),maps_url=nullif($7,''),total_amount=$8,status=$9,updated_at=now() where id=$1 returning id,paid_amount as "paidAmount",downpayment_amount as "downpaymentAmount",status`,[body.id,String(body.eventName).trim(),body.date,body.startTime||'',body.endTime||'',body.venue||'',body.mapsUrl||'',total/100,body.status]);
+  await db.query("insert into public.audit_logs(actor_id,action,entity_type,entity_id,metadata) values($1,'BOOKING_UPDATE','bookings',$2,$3::jsonb)",[auth.user!.id,body.id,JSON.stringify({before:{status:current.status,total:current.total_amount},after:{status:body.status,total:total/100}})]);
+  await db.query('commit'); if(googleCalendarConfigured()) after(async()=>{try{await syncGoogleCalendar(body.id);}catch{console.error('Calendar sync deferred; retry from Calendar.');}}); return Response.json({booking:saved.rows[0]});
+ }catch(e){await db.query('rollback').catch(()=>{});return Response.json({error:e instanceof Error?e.message:'Could not save booking.'},{status:400});}finally{db.release();}
 }

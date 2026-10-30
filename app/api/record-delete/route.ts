@@ -55,6 +55,8 @@ export async function POST(request: Request) {
     }
 
     if (table === "bookings") {
+      const financialHistory = await client.query(`select exists(select 1 from public.cash_transactions where booking_id=$1 or reference like '%' || $1::text || '%') or exists(select 1 from public.payments where booking_id=$1) or exists(select 1 from public.inventory_movements where booking_id=$1) or exists(select 1 from public.expenses where booking_id=$1) as linked`,[id]);
+      if (financialHistory.rows[0].linked) { await client.query('rollback'); return Response.json({error:'This booking has financial or stock history. Keep it in the archive; linked audit records cannot be permanently removed.'},{status:409}); }
       const linked = await client.query(`
         select
           (select count(*)::int from public.payments where booking_id = $1::uuid) as payments,

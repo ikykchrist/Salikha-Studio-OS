@@ -65,33 +65,26 @@ export async function POST(request: Request) {
       totalCost += cost;
       await client.query("update public.inventory_items set on_hand = on_hand - $2, updated_at = now() where id = $1", [item.id, quantity]);
       await client.query(
-        "insert into public.inventory_movements (inventory_item_id, booking_id, movement_type, quantity, unit_cost, notes) values ($1, $2, 'USAGE', $3, $4, $5)",
-        [item.id, booking.id, quantity, unitCost, `Used for ${booking.event_name}`],
+        "insert into public.inventory_movements (inventory_item_id, booking_id, movement_type, quantity, unit_cost, notes, created_by) values ($1, $2, 'USAGE', $3, $4, $5, $6)",
+        [item.id, booking.id, quantity, unitCost, `Used for ${booking.event_name}`, auth.user!.id],
       );
       await client.query(
         "insert into public.booking_consumable_usage (booking_id, inventory_item_id, consumable_name, quantity, unit, unit_cost, pcs_per_unit) values ($1, $2, $3, $4, $5, $6, $7)",
         [booking.id, item.id, item.name, quantity, item.unit, unitCost, pcsPerUnit],
       );
-      if (cost > 0) {
-        const expense = await client.query("insert into public.expenses (booking_id, description, amount, expense_date, category, classification, account, status, notes) values ($1, $2, $3, $4::date, 'Consumables', 'DIRECT', 'Cash on hand', 'PAID', $5) returning id", [booking.id, `${item.name} used for ${booking.event_name}`, cost, booking.event_date, `${quantity} ${item.unit}; ${pcsPerUnit} pcs per ${item.unit}; ₱${(unitCost / pcsPerUnit).toFixed(4)} per piece`]);
-        await postExpenseCash(client, expense.rows[0].id, booking.id, booking.event_name, item.name, cost, booking.event_date, "Consumables");
-      }
+
     }
     const directCosts = [[transportCost, "Transportation", "Actual transportation cost"], [operatorSalary, "Operator salary", "Operator salary"]] as const;
     for (const [amount, category, description] of directCosts) if (amount > 0) {
-      const expense = await client.query("insert into public.expenses (booking_id, description, amount, expense_date, category, classification, account, status) values ($1, $2, $3, $4::date, $5, 'DIRECT', 'Cash on hand', 'PAID') returning id", [booking.id, `${description} — ${booking.event_name}`, amount, booking.event_date, category]);
-      await postExpenseCash(client, expense.rows[0].id, booking.id, booking.event_name, description, amount, booking.event_date, category);
+      await client.query("insert into public.expenses (booking_id, description, amount, expense_date, category, classification, account, status) values ($1, $2, $3, $4::date, $5, 'DIRECT', 'Unassigned', 'PENDING') returning id", [booking.id, `${description} — ${booking.event_name}`, amount, booking.event_date, category]);
+
     }
     await client.query("update public.bookings set actual_transport_cost = $2::numeric, operator_salary = $3::numeric, consumables_reconciled_at = now(), updated_at = now() where id = $1", [booking.id, transportCost, operatorSalary]);
+    await client.query("insert into public.audit_logs(actor_id,action,entity_type,entity_id,metadata) values($1,'BOOKING_CLOSEOUT','bookings',$2,$3::jsonb)", [auth.user!.id,booking.id,JSON.stringify({consumablesCost:totalCost,transportCost,operatorSalary})]);
     await client.query("commit");
     return Response.json({ ok: true, consumablesCost: Number(totalCost.toFixed(2)), transportationCost: transportCost, operatorSalary, totalDirectCosts: Number((totalCost + transportCost + operatorSalary).toFixed(2)) });
   } catch (error) {
     await client.query("rollback").catch(() => undefined);
     return Response.json({ error: error instanceof Error ? error.message : "Could not record booking usage." }, { status: 500 });
   } finally { client.release(); }
-}
-
-async function postExpenseCash(client: PoolClient, expenseId: string, bookingId: string, eventName: string, title: string, amount: number, eventDate: string, category: string) {
-  const account = await client.query("insert into public.cash_accounts (name, opening_balance) values ('Cash on hand', 0) on conflict (name) do update set is_active = true returning id");
-  await client.query("insert into public.cash_transactions (account_id, transaction_date, type, description, amount, direction, status, reference) values ($1, $2::date, 'Expense', $3, $4::numeric, 'OUTFLOW', 'POSTED', $5) on conflict (reference) where reference is not null do nothing", [account.rows[0].id, eventDate, `${category}: ${title} for ${eventName}`, amount, `booking-expense:${expenseId}`]);
 }

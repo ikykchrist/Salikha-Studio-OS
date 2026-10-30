@@ -23,6 +23,7 @@ export async function POST(request: Request) {
     const actual = Math.round(Number(actualBalance) * 100) / 100;
     const difference = Math.round((actual - systemBalance) * 100) / 100;
     const result = await client.query("insert into public.cash_reconciliations (account_id, reconciled_date, actual_balance, system_balance, difference, notes) values ($1::uuid, $2::date, $3::numeric(12,2), $4::numeric(12,2), $5::numeric(12,2), nullif($6, '')) returning id, reconciled_date, actual_balance, system_balance, difference", [accountId, date, actual.toFixed(2), systemBalance.toFixed(2), difference.toFixed(2), typeof notes === "string" ? notes.trim() : ""]);
+    await client.query("insert into public.audit_logs(actor_id,action,entity_type,entity_id,metadata) values($1,'CASH_COUNT','cash_reconciliations',$2,$3::jsonb)",[auth.user!.id,result.rows[0].id,JSON.stringify({accountId,date,systemBalance,actual,difference})]);
     await client.query("commit");
     return Response.json({ reconciliation: result.rows[0] }, { status: 201 });
   } catch (error) {

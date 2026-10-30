@@ -100,6 +100,12 @@ export async function POST(request: Request) {
     const body = await request.json() as RequestBody;
     const { table, operation } = body;
     if (!tables.has(table) || !["select", "insert", "update", "delete"].includes(operation)) return Response.json({ error: "Unsupported table or operation." }, { status: 400 });
+    if (operation !== 'select' && ['cash_transactions','payments','expenses','inventory_movements','bookings'].includes(table)) {
+      return Response.json({error:'Use the dedicated booking, payment, expense or stock workflow so linked records and audit history remain consistent.'},{status:409});
+    }
+    if (table === 'inventory_items' && operation !== 'select' && operation !== 'delete' && (Array.isArray(body.payload) ? body.payload : [body.payload]).some(row => row && ('on_hand' in row || (operation === 'update' && 'average_unit_cost' in row)))) {
+      return Response.json({error:'Stock quantity and weighted cost must be changed through stock movements.'},{status:409});
+    }
     const preparationFields = ["preparation_layout_ready", "preparation_venue_ready", "preparation_backdrop_color"];
     const payloadRows = Array.isArray(body.payload) ? body.payload : body.payload ? [body.payload] : [];
     if (table === "bookings" && ["insert", "update"].includes(operation) && payloadRows.some((row) => preparationFields.some((field) => field in row))) {
