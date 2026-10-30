@@ -34,3 +34,7 @@ Google Calendar uses server-only OAuth credentials, an AES-256-GCM token encrypt
 `scripts/verify-workflows.mjs` refuses remote database/origin URLs, creates tagged temporary fixtures, and deletes only those fixtures in its cleanup. Run it against the localhost preview using `QA_DATABASE_URL` and optional `QA_ORIGIN` (default `http://localhost:3100`). It covers concurrent duplicate receipts, overpayment rejection, completion payment gate, stock purchase/consumption/returns, expense settlement, transfers, owner capital/loans, report reconciliation, invalid dates, client follow-ups, protected generic writes and PDF generation.
 
 The report accounting concepts were checked against [IFRS 15](https://www.ifrs.org/issued-standards/list-of-standards/ifrs-15-revenue-from-contracts-with-customers/) and [IAS 7](https://www.ifrs.org/issued-standards/list-of-standards/ias-7-statement-of-cash-flows/). This implementation does not claim complete IFRS or tax compliance.
+
+## Booking downpayments
+
+Priced bookings require a received downpayment, active receiving account and actual payment date. Saving a booking posts its payment and Cashflow receipt atomically; retries do not duplicate the receipt. Use Collect payment for later collections. The booking register shows downpayment, total paid and remaining balance. Zero-value test/free bookings need no payment.

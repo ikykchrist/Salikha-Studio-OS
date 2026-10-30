@@ -19,11 +19,21 @@ try{
  await pool.query("insert into public.inventory_items(id,name,category,unit,on_hand,average_unit_cost) values($1,$2,'Supplies','piece',0,0)",[itemId,`[QA ${run}] Paper`]);
  await pool.query("insert into public.service_packages(id,name) values($1,$2)",[packageId,`[QA ${run}] Package`]);
  await pool.query('insert into public.package_recipes(package_id,inventory_item_id,quantity) values($1,$2,2)',[packageId,itemId]);
- await request('/api/bookings',{id:bookingId,clientId,packageId,eventName:'QA event',date:'2026-01-15',total:1000,startTime:'10:00',endTime:'12:00'});
+ const booking={id:bookingId,clientId,packageId,eventName:'QA event',date:'2026-01-15',total:1000,startTime:'10:00',endTime:'12:00',downpaymentAmount:200,paymentAccountId:accountId,paymentDate:'2026-01-14',paymentReference:'QA deposit reference'};
+ await request('/api/bookings',{...booking,downpaymentAmount:0},400);
+ await request('/api/bookings',{...booking,downpaymentAmount:1001},400);
+ await request('/api/bookings',{...booking,paymentAccountId:randomUUID()},400);
+ assert.equal((await pool.query('select count(*)::int as n from public.bookings where id=$1',[bookingId])).rows[0].n,0);checks++;
+ const [created,retried]=await Promise.all([request('/api/bookings',booking),request('/api/bookings',booking)]);
+ assert.equal(Number(created.booking.paidAmount),200);assert.equal(Number(retried.booking.downpaymentAmount),200);checks+=2;
+ const deposit=(await pool.query('select *,transaction_date::text as receipt_date from public.cash_transactions where booking_id=$1',[bookingId])).rows;
+ assert.equal(deposit.length,1);assert.equal(deposit[0].amount,'200.00');assert.equal(deposit[0].receipt_date,'2026-01-14');assert.equal(deposit[0].external_reference,'QA deposit reference');checks+=4;
+ assert.equal((await pool.query('select count(*)::int as n from public.payments where booking_id=$1',[bookingId])).rows[0].n,1);checks++;
+
  await request('/api/bookings',{id:bookingId,clientId,packageId,eventName:'QA event',date:'2026-01-15',total:1000});
  const edit={id:bookingId,eventName:'QA event',date:'2026-01-15',startTime:'10:00',endTime:'12:00',total:1000,status:'DONE'};
  await request('/api/booking-update',edit,400); // no fabricated full payment
- const receipt={requestId:randomUUID(),action:'RECEIPT',date:'2026-01-15',accountId,bookingId,amount:1000};
+ const receipt={requestId:randomUUID(),action:'RECEIPT',date:'2026-01-15',accountId,bookingId,amount:800};
  await Promise.all([request('/api/money',receipt),request('/api/money',receipt)]); // concurrency retry posts once
  assert.equal((await pool.query('select paid_amount from public.bookings where id=$1',[bookingId])).rows[0].paid_amount,'1000.00');checks++;
  await request('/api/money',{...receipt,requestId:randomUUID(),amount:1},400); // cannot overcollect
@@ -49,6 +59,11 @@ try{
  const activity=randomUUID();await request('/api/client-activities',{id:activity,clientId,kind:'FOLLOW_UP',summary:'QA follow-up',dueDate:'2026-01-20'});await request('/api/client-activities',{id:activity,action:'COMPLETE'});
  const pdf=await fetch(base+'/api/reports?from=2026-01-01&to=2026-01-31&format=pdf&kind=revenue',{headers});assert.equal(pdf.status,200);assert.match(pdf.headers.get('content-type'),/pdf/);await mkdir('tmp/pdfs',{recursive:true});await writeFile('tmp/pdfs/revenue-qa.pdf',Buffer.from(await pdf.arrayBuffer()));
  const cashPdf=await fetch(base+'/api/reports?from=2026-01-01&to=2026-01-31&format=pdf&kind=cashflow',{headers});await writeFile('tmp/pdfs/cashflow-qa.pdf',Buffer.from(await cashPdf.arrayBuffer()));checks+=2;
+ await request('/api/booking-update',{...edit,status:'PENDING'});
+ await money('VOID',{transactionId:deposit[0].id,description:'QA correction of initial deposit'});
+ const corrected=(await pool.query('select paid_amount,downpayment_amount from public.bookings where id=$1',[bookingId])).rows[0];
+ assert.equal(corrected.paid_amount,'800.00');assert.equal(corrected.downpayment_amount,'0.00');checks+=2;
+ assert.ok((await pool.query('select voided_at from public.payments where reference=$1',[deposit[0].reference])).rows[0].voided_at);checks++;
  console.log(`PASS: ${checks} workflow assertions. Revenue 1000, direct costs 150, operating costs 100, operating profit 750, closing cash 2850. PDFs generated for visual QA.`);
 }finally{
  // Remove only this run's tagged fixtures, never existing local records.

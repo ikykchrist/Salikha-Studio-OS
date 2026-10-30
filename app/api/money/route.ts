@@ -54,7 +54,7 @@ export async function POST(request: Request) {
       if(tx.booking_id){
         const booking=await db.query('select status from public.bookings where id=$1 for update',[tx.booking_id]);
         if(booking.rows[0]?.status==='DONE')throw Error('Reopen the booking before voiding its payment.');
-        await db.query('update public.bookings set paid_amount=greatest(0,paid_amount-$2),updated_at=now() where id=$1',[tx.booking_id,tx.amount]);
+        await db.query('update public.bookings set paid_amount=greatest(0,paid_amount-$2),downpayment_amount=case when $3 then 0 else downpayment_amount end,updated_at=now() where id=$1',[tx.booking_id,tx.amount,String(tx.reference||'').startsWith('booking-deposit:')]);
         await db.query('update public.payments set voided_at=now() where reference=$1',[tx.reference]);
       }
       if(tx.expense_id)await db.query("update public.expenses set status='PENDING',paid_date=null,updated_at=now() where id=$1",[tx.expense_id]);
