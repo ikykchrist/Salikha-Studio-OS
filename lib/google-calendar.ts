@@ -53,7 +53,7 @@ export async function syncGoogleCalendar(bookingId?: string) {
   const { rows: connectionRows } = await pool.query("select calendar_id from public.google_calendar_connections where id = true");
   if (!connectionRows[0]) throw new Error("Google Calendar is not connected.");
   const calendarId = encodeURIComponent(connectionRows[0].calendar_id as string);
-  const { rows: bookings } = await pool.query(`select b.id, b.event_name, b.event_date::text as event_date, b.start_time::text as start_time, b.end_time::text as end_time, b.venue, b.maps_url, b.status, c.display_name as client_name, p.name as package_name, p.calendar_color, ce.google_event_id
+  const { rows: bookings } = await pool.query(`select b.id, b.event_name, b.event_date::text as event_date, b.start_time::text as start_time, b.end_time::text as end_time, b.venue, b.maps_url, b.notes, b.status, c.display_name as client_name, p.name as package_name, p.calendar_color, ce.google_event_id
     from public.bookings b left join public.clients c on c.id=b.client_id left join public.service_packages p on p.id=b.package_id left join public.calendar_events ce on ce.booking_id=b.id where ($1::uuid is null or b.id=$1::uuid) order by b.event_date`, [bookingId || null]);
   const result = { synced: 0, removed: 0, failed: [] as Array<{ bookingId: string; message: string }> };
   for (const booking of bookings as Array<Record<string, string | null>>) {
@@ -68,7 +68,7 @@ export async function syncGoogleCalendar(bookingId?: string) {
       }
       if (!booking.event_date || !booking.start_time || !booking.end_time) throw new Error("Event date, start time, and end time are required for Google Calendar sync.");
       const time = (value: string) => value.slice(0, 8).length === 5 ? `${value.slice(0, 5)}:00` : value.slice(0, 8);
-      const event = { summary: booking.event_name, location: booking.venue || undefined, description: [`Client: ${booking.client_name || "Unknown client"}`, `Package: ${booking.package_name || "Custom service"}`, booking.maps_url ? `Map: ${booking.maps_url}` : ""].filter(Boolean).join("\n"), start: { dateTime: `${booking.event_date}T${time(booking.start_time!)}`, timeZone: "Asia/Manila" }, end: { dateTime: `${booking.event_date}T${time(booking.end_time!)}`, timeZone: "Asia/Manila" }, extendedProperties: { private: { salikhaBookingId: booking.id! } } };
+      const event = { summary: booking.event_name, location: booking.venue || undefined, description: [`Client: ${booking.client_name || "Unknown client"}`, `Package: ${booking.package_name || "Custom service"}`, booking.maps_url ? `Map: ${booking.maps_url}` : "", booking.notes?.trim() ? `\nInternal notes:\n${booking.notes.trim()}` : ""].filter(Boolean).join("\n"), start: { dateTime: `${booking.event_date}T${time(booking.start_time!)}`, timeZone: "Asia/Manila" }, end: { dateTime: `${booking.event_date}T${time(booking.end_time!)}`, timeZone: "Asia/Manila" }, extendedProperties: { private: { salikhaBookingId: booking.id! } } };
       const eventId = booking.google_event_id || booking.id!.replaceAll("-", "");
       let resource: { id: string };
       if (booking.google_event_id) resource = await googleApi(`/calendars/${calendarId}/events/${encodeURIComponent(eventId)}`, { method: "PATCH", body: JSON.stringify(event) }) as { id: string };
