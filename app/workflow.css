@@ -54,6 +54,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .workflow-review h2 { display: flex; align-items: center; gap: 10px; }
 .workflow-review li { margin: 12px 0; font-size: 14px; }
 .workflow-crm { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-block: 22px; align-items: start; }
+.client-message-templates { grid-column: 1 / -1; }
+.client-message-templates label { display: grid; gap: 8px; font-size: 14px; font-weight: 550; }
+.client-message-templates label small { font-weight: 400; color: var(--muted); line-height: 1.5; }
+.client-message-templates textarea { line-height: 1.7; font-size: 15px; resize: vertical; }
 .workflow-followup { display: grid; gap: 8px; padding: 16px 0; border-bottom: 1px solid var(--line); }
 .workflow-followup .secondary-button { justify-self: start; }
 .workflow-timeline > div { border-left: 2px solid var(--line); padding: 8px 16px; margin-top: 12px; }

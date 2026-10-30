@@ -38,3 +38,7 @@ The report accounting concepts were checked against [IFRS 15](https://www.ifrs.o
 ## Booking downpayments
 
 Priced bookings require a received downpayment, active receiving account and actual payment date. Saving a booking posts its payment and Cashflow receipt atomically; retries do not duplicate the receipt. Use Collect payment for later collections. The booking register shows downpayment, total paid and remaining balance. Zero-value test/free bookings need no payment.
+
+## Client care message templates
+
+Clients includes eight editable Taglish templates for event follow-ups, inquiries, post-event feedback, rebooking, cold outreach, cold calls, promotions and referrals. Select a client to personalize the greeting, add the occasion, and copy the draft. Promos require actual offer details. Use as follow-up fills the activity form; save it with a due date to persist the task. Copying never sends a message or marks it completed.
