@@ -19,6 +19,11 @@ export async function POST(request: Request) {
   try { body = await request.json(); } catch { return Response.json({ error: "Valid JSON is required." }, { status: 400 }); }
   if (typeof body.calendarId !== "string" || !body.calendarId.trim()) return Response.json({ error: "Choose a calendar." }, { status: 400 });
   try {
+    const existing=await getLocalPostgresPool().query('select calendar_id from public.google_calendar_connections where id=true');
+    if(existing.rows[0]&&existing.rows[0].calendar_id!==body.calendarId){
+      const linked=await getLocalPostgresPool().query('select exists(select 1 from public.calendar_events where google_event_id is not null) as linked');
+      if(linked.rows[0].linked)return Response.json({error:'Bookings are already linked to the current calendar. Keep that calendar until an administrator reviews moving the existing events.'},{status:409});
+    }
     const calendars = await googleApi("/users/me/calendarList?minAccessRole=writer&maxResults=250") as { items?: Array<{ id: string; summary?: string; accessRole?: string }> };
     const chosen = calendars.items?.find((item) => item.id === body.calendarId && (item.accessRole === "writer" || item.accessRole === "owner"));
     if (!chosen) return Response.json({ error: "Calendar not found or is not writable by the connected account." }, { status: 403 });

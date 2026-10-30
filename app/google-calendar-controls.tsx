@@ -62,7 +62,7 @@ export function GoogleCalendarControls() {
       if (!response.ok) throw new Error(result.error || "Could not select that calendar.");
       await refresh(); setMessage("Target calendar saved.");
       await sync();
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not select that calendar."); }
+    } catch (cause) { setCalendarId(connection?.calendar_id || ""); setError(cause instanceof Error ? cause.message : "Could not select that calendar."); }
     finally { setBusy(false); }
   };
   return <section className="calendar-status">
