@@ -302,7 +302,7 @@ function BookingsView({ isAdmin, showForm, onShowForm, onNavigate }: { isAdmin: 
     </section>
     <section className="booking-toolbar" aria-label="Booking filters">
       <div className="search-field"><Search aria-hidden="true" /><input value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Search bookings" placeholder="Search client, venue, or event" /></div>
-      <button className="filter-button" type="button"><CalendarDays aria-hidden="true" /> Date <Chevron /></button>
+      
        <label className="visually-hidden" htmlFor="booking-status-filter">Booking status</label><select className="filter-select" id="booking-status-filter" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option>All statuses</option><option>Pending</option><option>Archive</option><option>Done</option><option>Cancelled</option></select>
       <label className="visually-hidden" htmlFor="booking-date-filter">Booking date range</label><select className="filter-select" id="booking-date-filter" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)}><option>This month</option><option>Next 30 days</option><option>All dates</option></select>
     </section>
@@ -537,7 +537,7 @@ function SettingsView({ user }: { user: AuthUser }) {
     <>
       <section className="page-heading"><div><p className="eyebrow">Workspace / Settings</p><h1>Settings</h1><p className="subheading">Configure connections and business rules once, then let the system stay consistent.</p></div></section>
       <section className="settings-grid">
-        <article className="settings-card"><div className="settings-card-icon"><ShieldCheck aria-hidden="true" /></div><div><p className="eyebrow">Data source</p><h2>Business data</h2><p>{healthError || "Local PostgreSQL · local machine only"}</p></div><span className={"settings-status " + (databaseHealthy ? "ready" : "pending")}>{databaseHealthy ? "Healthy" : "Unreachable"}</span><button className="secondary-button" type="button" onClick={() => window.location.reload()}>Check again</button></article>
+        <article className="settings-card"><div className="settings-card-icon"><ShieldCheck aria-hidden="true" /></div><div><p className="eyebrow">Data source</p><h2>Business data</h2><p>{healthError || "Shared business database"}</p></div><span className={"settings-status " + (databaseHealthy ? "ready" : "pending")}>{databaseHealthy ? "Healthy" : "Unreachable"}</span><button className="secondary-button" type="button" onClick={() => window.location.reload()}>Check again</button></article>
         <ProfileSettingsCard user={user} />
         <GoogleCalendarSetupSettings />
         <article className="settings-card"><div className="settings-card-icon"><Users aria-hidden="true" /></div><div><p className="eyebrow">Access</p><h2>Team accounts</h2><p>Admins can create and manage user or admin accounts.</p></div><span className="settings-status ready">{user.role}</span></article>
