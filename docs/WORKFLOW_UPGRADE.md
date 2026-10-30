@@ -5,10 +5,10 @@
 1. Add or select the client, then create the booking. Bookings start in the active/pending view.
 2. Use **Collect payment** to record a deposit or balance with its actual date and receiving account. A payment updates the booking and cash ledger atomically. Completing an event never invents a payment.
 3. Full payment is required before **Mark done**. Done and cancelled bookings appear in the Archive filter; records remain available for reports.
-4. Use **Close out usage** for actual event consumption. Enter only transport/salary costs not already entered in Expenses. These costs start unpaid; pay them from Expenses when payment actually occurs.
+4. Use **Close out usage** for actual event consumption. Enter only transport/salary costs not already entered in Cashflow. These costs start unpaid; pay them from Cashflow → Unpaid bills when payment actually occurs.
 5. Use **Inventory → Stock in** for purchases. Enter quantity in the item's displayed stock unit and cost per that unit. Choose paid now or an unpaid supplier bill. Stock-in updates weighted average cost and creates a linked bill/payment once.
 6. Use **Usage** for general supply consumption. Return unused supplies against an original usage; cumulative returns cannot exceed that usage. Consumption and returns do not create another cash payment.
-7. Use **Record expense** for incurred business costs. Keep costs and payables in Expenses; paying an expense posts its cash out automatically. Do not enter the same cost manually again in Cashflow.
+7. Use **Record expense** for incurred business costs. Manage costs and payables in Cashflow → Unpaid bills; paying a bill posts its cash out automatically. Do not enter the same cost again.
 8. Use **Transfer** for movement between your own accounts. Use the distinct capital, drawings, loan-principal and asset-purchase actions instead of calling every inflow income or every outflow an expense.
 9. Compare physical/bank balances with the ledger using **Count and reconcile**. A count records a variance; it does not silently change cash.
 10. Schedule client follow-ups and record call/chat/email outcomes. Contact links open channels; the app does not automatically send messages.
