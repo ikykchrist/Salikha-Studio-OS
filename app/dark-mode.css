@@ -1,0 +1,119 @@
+/* Theme tokens and remaining module surfaces. Keep this after the shared styles. */
+:root { color-scheme: light; --surface-muted: #f1f1f3; }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --canvas: #111318;
+  --surface: #1b1e26;
+  --surface-raised: #242833;
+  --surface-inset: #151820;
+  --surface-muted: #282d38;
+  --hover-surface: #2b303c;
+  --ink: #f2f5fa;
+  --muted: #b2bac8;
+  --line: #363c49;
+  --dark: #101218;
+  --accent: #d9364c;
+  --accent-dark: #ff9baa;
+  --soft-accent: #36232d;
+  --positive: #81d9b0;
+  --success: #92dfb6; --success-soft: #1c342c; --success-line: #345b49;
+  --warning: #f1cf80; --warning-soft: #352e20; --warning-line: #665434;
+  --danger: #ffacb8; --danger-soft: #38232c; --danger-line: #67404d;
+  --info: #aecbff; --info-soft: #223047; --info-line: #3a5275;
+  --neutral: #c2cad7; --neutral-soft: #282d38; --neutral-line: #444c5c;
+  --focus-ring: #9fbaff;
+}
+
+:root[data-theme="dark"] body { background: var(--canvas); color: var(--ink); }
+:root[data-theme="dark"] ::selection { background: #5a3446; color: #fff; }
+:root[data-theme="dark"] * { scrollbar-color: #505969 var(--canvas); }
+:root[data-theme="dark"] .sidebar { border-right: 1px solid #292e39; }
+:root[data-theme="dark"] .sidebar .workspace-label,
+:root[data-theme="dark"] .nav-icon,
+:root[data-theme="dark"] .brand span,
+:root[data-theme="dark"] .user-chip span { color: #a6afbf; }
+:root[data-theme="dark"] .nav-item { color: #c2cad7; }
+:root[data-theme="dark"] .nav-item:hover { background: var(--surface-raised); color: var(--ink); }
+:root[data-theme="dark"] .nav-item.active { background: var(--accent); color: #fff; box-shadow: 0 4px 16px rgb(217 54 76 / 15%); }
+:root[data-theme="dark"] .nav-item.active .nav-icon { color: #fff; }
+:root[data-theme="dark"] .user-chip { border-color: var(--line); }
+:root[data-theme="dark"] .avatar { background: var(--soft-accent); color: var(--accent-dark); }
+
+:root[data-theme="dark"] :is(.panel, .metric-card, .settings-card, .booking-summary-card,
+  .expense-metric, .inventory-metric, .equipment-metric, .package-metric, .inventory-notice,
+  .package-row, .booking-drawer, .calendar-setup-dialog, .invoice-form-drawer,
+  .app-dialog, .admin-override-dialog, .invoice-maintenance-dialog, .notification-popover) {
+  background: var(--surface); border-color: var(--line); color: var(--ink);
+  box-shadow: 0 4px 18px rgb(0 0 0 / 12%);
+}
+:root[data-theme="dark"] :is(.inventory-price-metric, .package-price-metric, .price-preview,
+  .package-loading-note, .recipe-editor-note, .profitability-results > div, .reconciliation-result) {
+  background: var(--surface-raised); border-color: var(--line); color: var(--ink);
+}
+:root[data-theme="dark"] .booking-summary-card.accent-card {
+  background: linear-gradient(135deg, #35232e, #23232e); border-color: #63404e;
+}
+:root[data-theme="dark"] .booking-summary-card.accent-card :is(span, small) { color: #e4bac4; }
+:root[data-theme="dark"] .booking-summary-card.accent-card strong { color: var(--ink); }
+:root[data-theme="dark"] :is(.drawer-body, .calendar-setup-body, .invoice-form-body) { background: var(--surface-inset); }
+:root[data-theme="dark"] :is(.drawer-header, .drawer-footer, .invoice-form-header, .invoice-form-footer) { background: var(--surface); border-color: var(--line); }
+
+:root[data-theme="dark"] :is(input, select, textarea),
+:root[data-theme="dark"] .form-grid :is(input, select, textarea) {
+  background: var(--surface-inset); color: var(--ink); border-color: #454e5f;
+  caret-color: var(--accent-dark); accent-color: var(--accent);
+}
+:root[data-theme="dark"] :is(input, textarea)::placeholder { color: #99a4b6; opacity: 1; }
+:root[data-theme="dark"] select option { background: var(--surface-inset); color: var(--ink); }
+:root[data-theme="dark"] :is(input, select, textarea):focus-visible { border-color: var(--focus-ring); outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+:root[data-theme="dark"] :is(.form-grid label, .drawer-body label, .setup-select-label, .package-color-field legend,
+  .recipe-item-field, .recipe-quantity-row > label, .google-oauth-form label) { color: #d7deea; }
+:root[data-theme="dark"] :is(.secondary-button, .filter-select, .status-select, .close-button, .app-dialog-close) {
+  background: var(--surface-raised); color: var(--ink); border-color: #454e5f;
+}
+:root[data-theme="dark"] :is(.secondary-button, .close-button):hover:not(:disabled) {
+  background: var(--hover-surface); border-color: #788398; color: var(--ink);
+}
+:root[data-theme="dark"] .primary-button { background: var(--accent); border-color: var(--accent); color: #fff; box-shadow: 0 4px 14px rgb(217 54 76 / 12%); }
+:root[data-theme="dark"] .primary-button:hover:not(:disabled) { background: #bd2b40; border-color: #bd2b40; }
+:root[data-theme="dark"] .settings-card .secondary-button:disabled { background: var(--surface-muted); color: var(--muted); }
+:root[data-theme="dark"] :is(.text-button, .booking-map-link, .missing-link, .drawer-header .eyebrow) { color: var(--accent-dark); }
+:root[data-theme="dark"] a.secondary-button { color: var(--ink); text-decoration: none; }
+:root[data-theme="dark"] .step-number { background: var(--soft-accent); color: var(--accent-dark); }
+:root[data-theme="dark"] .search-field { background: var(--surface); }
+:root[data-theme="dark"] .search-field input { background: transparent; }
+
+:root[data-theme="dark"] :is(.package-row, .inventory-row, .equipment-row, .client-row, .booking-row,
+  .pulse-list button, .health-list button, .notification-row):hover {
+  background: var(--hover-surface); color: var(--ink); border-color: var(--line);
+}
+:root[data-theme="dark"] :is(.package-row, .inventory-row, .equipment-row, .client-row).selected {
+  background: var(--soft-accent); border-color: #704452; color: var(--ink);
+}
+:root[data-theme="dark"] :is(.booking-table-head, .inventory-head, .equipment-head, .package-head,
+  .workflow-table thead) { background: var(--surface-inset); color: var(--muted); }
+:root[data-theme="dark"] .workflow-table tbody tr:hover { background: var(--surface-raised); }
+:root[data-theme="dark"] :is(.notification-row, .booking-event-cell, .agenda-event-title strong) { color: var(--ink); }
+:root[data-theme="dark"] .calendar-day.selected { border-color: var(--accent-dark); background: var(--soft-accent); }
+:root[data-theme="dark"] .calendar-day:disabled { background: var(--canvas); }
+:root[data-theme="dark"] .recipe-summary-line { border-color: var(--line); }
+:root[data-theme="dark"] .recipe-summary-stock .recipe-shortage { color: var(--warning); }
+:root[data-theme="dark"] .equipment-metric.warning strong { color: var(--warning); }
+:root[data-theme="dark"] .equipment-metric.danger strong { color: var(--danger); }
+:root[data-theme="dark"] .package-error { color: var(--danger); }
+:root[data-theme="dark"] :is(.invoice-email-setup svg, .inventory-form-note) { color: var(--warning); }
+:root[data-theme="dark"] .invoice-form-totals > div { color: var(--muted); }
+:root[data-theme="dark"] .invoice-remove-line { color: var(--danger); }
+:root[data-theme="dark"] :is(.booking-overlay, .app-dialog-backdrop, .invoice-form-overlay) { background: rgb(3 6 12 / 72%); }
+
+/* The invoice paper is a printable document; its own ink and paper stay paired. */
+:root[data-theme="dark"] .invoice-paper { color-scheme: light; box-shadow: 0 8px 30px rgb(0 0 0 / 22%); }
+:root[data-theme="dark"] :is(.login-brand small, .login-subtitle, .login-card label small) { color: var(--muted); }
+:root[data-theme="dark"] .login-card input:focus { border-color: var(--focus-ring); outline-color: var(--focus-ring); }
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme="dark"] *, :root[data-theme="dark"] *::before, :root[data-theme="dark"] *::after { transition: none; animation: none; }
+}
+
+:root[data-theme="dark"] :is(.inventory-price-metric, .package-price-metric) strong { color: var(--accent-dark); }
+:root[data-theme="dark"] .admin-override-overlay { background: rgb(3 6 12 / 72%); }

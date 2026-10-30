@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import "./workflow.css";
+import "./dark-mode.css";
+import Script from "next/script";
 import { PwaRegister } from "./pwa-register";
 
 export const metadata: Metadata = {
@@ -16,8 +18,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
-      <body suppressHydrationWarning><PwaRegister />{children}</body>
+    <html lang="en" suppressHydrationWarning>
+      <body suppressHydrationWarning><Script id="salikha-theme" strategy="beforeInteractive">{`try { document.documentElement.dataset.theme = localStorage.getItem('salikha-theme') === 'dark' ? 'dark' : 'light'; } catch { document.documentElement.dataset.theme = 'light'; }`}</Script><PwaRegister />{children}</body>
     </html>
   );
 }
