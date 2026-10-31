@@ -22,6 +22,7 @@ export async function POST(request: Request) {
     const fingerprint=createHash('sha256').update(JSON.stringify(body)).digest('hex');
     const prior=await db.query("select metadata,actor_id from public.audit_logs where action='MONEY_POST' and metadata->>'requestId'=$1",[body.requestId]);
     if(prior.rowCount){if(prior.rows[0].actor_id!==auth.user!.id||prior.rows[0].metadata.fingerprint!==fingerprint)throw Error('This form was already posted with different details. Refresh before entering a new transaction.');await db.query('commit');return Response.json({ok:true,alreadyPosted:true});}
+    let remainingBalance:number|undefined;
     const action=String(body.action);
     const description=String(body.description||'').trim();
     const date=body.date;
@@ -66,7 +67,8 @@ export async function POST(request: Request) {
       const amount=cents(body.amount); if(amount<=0||amount>Math.round((Number(b.total_amount)-Number(b.paid_amount))*100))throw Error('Payment must be positive and cannot exceed the unpaid balance.');
       await post(amount,'INFLOW','BOOKING_RECEIPT',description||`Payment - ${b.event_name}`,accountId,null,b.id);
       await db.query('insert into public.payments(booking_id,amount,payment_date,method,reference,created_by) values($1,$2,$3,$4,$5,$6)',[b.id,amount/100,date,account.name,`workflow:${body.requestId}`,actor]);
-      await db.query('update public.bookings set paid_amount=paid_amount+$2,updated_at=now() where id=$1',[b.id,amount/100]);
+      const updated=await db.query('update public.bookings set paid_amount=paid_amount+$2,updated_at=now() where id=$1 returning total_amount-paid_amount as remaining',[b.id,amount/100]);
+      remainingBalance=Number(updated.rows[0].remaining);
     }else if(action==='EXPENSE'){
       const amount=cents(body.amount); if(amount<=0||!description)throw Error('Enter a description and a positive expense amount.');
       if(!['DIRECT','OPERATING'].includes(String(body.classification)))throw Error('Choose direct or operating cost.');
@@ -89,6 +91,6 @@ export async function POST(request: Request) {
       await post(amount,['OWNER_CAPITAL','LOAN_RECEIVED','OTHER_INCOME'].includes(action)?'INFLOW':'OUTFLOW',action,description);
     }else throw Error('Unsupported money action.');
     await db.query("insert into public.audit_logs(actor_id,action,entity_type,metadata) values($1,'MONEY_POST','cash_transactions',$2::jsonb)",[actor,JSON.stringify({requestId:body.requestId,fingerprint,action,date,transactionDate,reason:description})]);
-    await db.query('commit');return Response.json({ok:true});
+    await db.query('commit');return Response.json({ok:true,remainingBalance});
   }catch(e){await db.query('rollback').catch(()=>{});return Response.json({error:e instanceof Error?e.message:'Posting failed.'},{status:400});}finally{db.release();}
 }

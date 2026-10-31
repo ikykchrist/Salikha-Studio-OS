@@ -1,4 +1,5 @@
 "use client";
+import {showToast} from "../lib/toasts";
 
 import { useCallback, useEffect, useState } from "react";
 import { StatusBadge } from "./status-badge";
@@ -51,7 +52,7 @@ export function GoogleCalendarControls() {
       if (!response.ok && response.status !== 207) throw new Error(result.error || "Calendar synchronization failed.");
       const successText = result.synced + " event(s) synced" + (result.removed ? ", " + result.removed + " removed" : "");
       if (result.failed?.length) { setError(successText + "; " + result.failed.length + " booking(s) need attention. Open Calendar sync status in Settings."); }
-      else setMessage(successText + ".");
+      else {setMessage(successText + ".");showToast(successText+" to Google Calendar.");}
       await refresh();
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Calendar synchronization failed."); }
     finally { setBusy(false); }

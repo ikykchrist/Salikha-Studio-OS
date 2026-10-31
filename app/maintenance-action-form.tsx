@@ -1,12 +1,14 @@
 "use client";
 
+import {showToast} from "../lib/toasts";
+import {todayManila} from "../lib/workflow-validation";
 import { useState } from "react";
 import { X } from "lucide-react";
 
 type MaintenanceRecord = { id: string; scheduled_date: string; completed_date: string | null; action_type: string; cost: number; vendor: string; notes: string | null };
 
 export function MaintenanceActionForm({ equipmentId, equipmentName, onClose, onSave }: { equipmentId: string; equipmentName: string; onClose: () => void; onSave: (record: MaintenanceRecord) => void | Promise<void> }) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayManila();
   const [actionType, setActionType] = useState("Maintenance");
   const [scheduledDate, setScheduledDate] = useState(today);
   const [completedDate, setCompletedDate] = useState("");
@@ -42,6 +44,7 @@ export function MaintenanceActionForm({ equipmentId, equipmentName, onClose, onS
       }).select("id").single();
       if (result.error || !result.data) throw new Error(result.error?.message || "Maintenance record was not saved.");
       await onSave({ ...record, id: result.data.id });
+      showToast(`${equipmentName}: ${actionType.toLowerCase()} ${completedDate?"completed and recorded. Great work keeping our gear event-ready!":"scheduled. Maintenance record saved."}`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Maintenance record was not saved.");
     } finally {
@@ -59,13 +62,14 @@ export function MaintenanceActionForm({ equipmentId, equipmentName, onClose, onS
             <small>{equipmentName}</small>
           </div>
           {error && <p className="form-warning" role="alert">{error}</p>}
-          <button className="close-button" type="button" onClick={onClose} aria-label="Close maintenance form"><X aria-hidden="true" /></button>
+          <button className="close-button" type="button" onClick={onClose} disabled={saving} aria-label="Close maintenance form"><X aria-hidden="true" /></button>
         </div>
         <div className="calendar-setup-body">
           <div className="form-grid">
             <label>Action type
               <select value={actionType} onChange={(event) => setActionType(event.target.value)}>
                 <option>Maintenance</option>
+                <option>Weekly maintenance</option>
                 <option>Repair</option>
                 <option>Cleaning</option>
                 <option>Inspection</option>
@@ -80,7 +84,7 @@ export function MaintenanceActionForm({ equipmentId, equipmentName, onClose, onS
           </div>
         </div>
         <div className="drawer-footer">
-          <button className="secondary-button" type="button" onClick={onClose}>Cancel</button>
+          <button className="secondary-button" type="button" onClick={onClose} disabled={saving}>Cancel</button>
           <button className="primary-button" type="button" onClick={submit} disabled={saving}>{saving ? "Saving…" : "Save maintenance"}</button>
         </div>
       </div>

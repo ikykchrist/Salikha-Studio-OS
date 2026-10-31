@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { AlertTriangle, CircleCheck, Info, X } from "lucide-react";
+import { ToastHost } from './toasts';
 
 type DialogRequest = { id: number; kind: "alert" | "confirm"; title: string; message: string; confirmLabel: string; cancelLabel: string; danger: boolean };
 type QueuedDialog = DialogRequest & { resolve: (confirmed: boolean) => void };
@@ -57,9 +58,9 @@ export function DialogHost() {
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [dialog?.id]);
-  if (!dialog) return null;
+  if (!dialog) return <ToastHost/>;
   const Icon = dialog.danger ? AlertTriangle : dialog.kind === "confirm" ? Info : CircleCheck;
-  return <div className="app-dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) settle(false); }}>
+  return <><ToastHost/><div className="app-dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) settle(false); }}>
     <section className={`app-dialog ${dialog.danger ? "danger" : ""}`} role="alertdialog" aria-modal="true" aria-labelledby="app-dialog-title" aria-describedby="app-dialog-message">
       <div className={`app-dialog-icon ${dialog.danger ? "danger" : ""}`}><Icon aria-hidden="true" /></div>
       <button className="app-dialog-close" type="button" aria-label="Close dialog" onClick={() => settle(false)}><X aria-hidden="true" /></button>
@@ -70,5 +71,5 @@ export function DialogHost() {
         <button className={dialog.danger ? "app-dialog-danger-button" : "primary-button"} type="button" ref={confirmRef} onClick={() => settle(true)}>{dialog.confirmLabel}</button>
       </div>
     </section>
-  </div>;
+  </div></>;
 }

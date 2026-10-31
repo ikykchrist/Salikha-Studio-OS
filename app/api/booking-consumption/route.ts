@@ -81,8 +81,9 @@ export async function POST(request: Request) {
     }
     await client.query("update public.bookings set actual_transport_cost = $2::numeric, operator_salary = $3::numeric, consumables_reconciled_at = now(), updated_at = now() where id = $1", [booking.id, transportCost, operatorSalary]);
     await client.query("insert into public.audit_logs(actor_id,action,entity_type,entity_id,metadata) values($1,'BOOKING_CLOSEOUT','bookings',$2,$3::jsonb)", [auth.user!.id,booking.id,JSON.stringify({consumablesCost:totalCost,transportCost,operatorSalary})]);
+    const receipts = await client.query("select coalesce(sum(amount),0) as amount from public.cash_transactions where booking_id=$1 and purpose='BOOKING_RECEIPT' and direction='INFLOW' and status='POSTED'", [booking.id]);
     await client.query("commit");
-    return Response.json({ ok: true, consumablesCost: Number(totalCost.toFixed(2)), transportationCost: transportCost, operatorSalary, totalDirectCosts: Number((totalCost + transportCost + operatorSalary).toFixed(2)) });
+    return Response.json({ ok: true, recordedReceipts: Number(receipts.rows[0].amount), inventoryItemsUpdated: lines.filter(line=>line.quantity>0).length, unpaidCosts: Number((transportCost+operatorSalary).toFixed(2)), consumablesCost: Number(totalCost.toFixed(2)), transportationCost: transportCost, operatorSalary, totalDirectCosts: Number((totalCost + transportCost + operatorSalary).toFixed(2)) });
   } catch (error) {
     await client.query("rollback").catch(() => undefined);
     return Response.json({ error: error instanceof Error ? error.message : "Could not record booking usage." }, { status: 500 });
