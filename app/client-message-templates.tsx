@@ -51,13 +51,13 @@ export function ClientMessageTemplates({clients,clientId,onClientChange,onUse}:{
    <label className="wide-field">{action==='call'?'Editable call script':'Editable message'}<small>{template.when}</small><textarea ref={messageRef} rows={8} maxLength={3500} value={draft} onChange={e=>{setEdited(e.target.value);setNotice('');}}/></label>
   </div>
   <div className="workflow-actions">
-   <button type="button" className="primary-button" disabled={!ready} onClick={async()=>{try{await navigator.clipboard.writeText(draft);setNotice('Copied. Paste it into your conversation when ready.');}catch{messageRef.current?.focus();messageRef.current?.select();setNotice('Automatic copy is unavailable. The text is selected; press Ctrl+C to copy.');}}}><Copy size={17}/> Copy {action==='call'?'call script':'message'}</button>
+   <button type="button" className="primary-button" data-intent="info" disabled={!ready} onClick={async()=>{try{await navigator.clipboard.writeText(draft);setNotice('Copied. Paste it into your conversation when ready.');}catch{messageRef.current?.focus();messageRef.current?.select();setNotice('Automatic copy is unavailable. The text is selected; press Ctrl+C to copy.');}}}><Copy size={17}/> Copy {action==='call'?'call script':'message'}</button>
    <button type="button" className="secondary-button" onClick={reset}><RotateCcw size={17}/> Reset draft</button>
    <button type="button" className="secondary-button" disabled={!ready} onClick={()=>{onUse(`${template.label}\n\n${draft}`);setNotice('Added to the follow-up form below. Choose a due date and Save activity to schedule it.');}}>Use as follow-up</button>
    {contact&&/^https?:\/\//i.test(contact.messenger)&&<a className="secondary-button" target="_blank" rel="noreferrer" href={contact.messenger}>Open Messenger / profile</a>}
   </div>
   {!contact&&<p className="workflow-help">Choose a client to personalize and copy a message.</p>}
   <p className="workflow-help">Copying or opening a chat does not send a message or mark a follow-up complete. Record the outcome below after reaching out.</p>
-  {notice&&<p className="workflow-callout" role="status">{notice}</p>}
+  {notice&&<p className="workflow-callout" data-tone="info" role="status">{notice}</p>}
  </article>;
 }

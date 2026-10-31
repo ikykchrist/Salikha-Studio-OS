@@ -1,0 +1,64 @@
+/* Color communicates intent; labels and icons carry the same meaning. */
+:root { --button-success: #18794e; --button-success-hover: #12633f; --button-danger: #b42332; }
+:root[data-theme="dark"] { --button-success: #18794e; --button-success-hover: #12633f; }
+.semantic-badge { align-items: center; border: 1px solid; border-radius: 999px; display: inline-flex; font-size: 12px; font-weight: 650; gap: 6px; line-height: 1.35; padding: 6px 10px; white-space: nowrap; }
+.semantic-badge svg { flex: 0 0 auto; }
+.semantic-badge[data-tone="success"] { background: var(--success-soft); border-color: var(--success-line); color: var(--success); }
+.semantic-badge[data-tone="warning"] { background: var(--warning-soft); border-color: var(--warning-line); color: var(--warning); }
+.semantic-badge[data-tone="danger"] { background: var(--danger-soft); border-color: var(--danger-line); color: var(--danger); }
+.semantic-badge[data-tone="info"] { background: var(--info-soft); border-color: var(--info-line); color: var(--info); }
+.semantic-badge[data-tone="neutral"] { background: var(--neutral-soft); border-color: var(--neutral-line); color: var(--neutral); }
+:root[data-theme] :is(button,a)[data-intent="success"] { background: var(--button-success); border-color: var(--button-success); box-shadow: 0 3px 10px rgb(24 121 78 / 12%); color: #fff; text-decoration: none; }
+:root[data-theme] :is(button,a)[data-intent="success"]:hover:not(:disabled) { background: var(--button-success-hover); border-color: var(--button-success-hover); color: #fff; }
+:root[data-theme] :is(button,a)[data-intent="danger"] { background: var(--danger-soft); border-color: var(--danger-line); color: var(--danger); box-shadow: none; }
+:root[data-theme] :is(button,a)[data-intent="danger"]:hover:not(:disabled) { background: var(--button-danger); border-color: var(--button-danger); color: #fff; }
+:root[data-theme] :is(button,a)[data-intent="warning"] { background: var(--warning-soft); border-color: var(--warning-line); color: var(--warning); box-shadow: none; }
+:root[data-theme] :is(button,a)[data-intent="info"] { background: var(--info-soft); border-color: var(--info-line); color: var(--info); box-shadow: none; text-decoration: none; }
+:root[data-theme] :is(button,a)[data-intent="warning"]:hover:not(:disabled),
+:root[data-theme] :is(button,a)[data-intent="info"]:hover:not(:disabled) { border-color: currentColor; filter: brightness(.97); }
+.semantic-legend { display: flex; flex-wrap: wrap; gap: 10px 24px; color: var(--muted); font-size: 12px; }
+.semantic-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.semantic-loading { align-items: center; color: var(--muted); display: flex; gap: 10px; justify-content: center; min-height: 150px; padding: 28px; }
+.semantic-loading::before { animation: semantic-spin 1s linear infinite; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; content: ''; height: 18px; width: 18px; }
+@keyframes semantic-spin { to { transform: rotate(360deg); } }
+:root[data-theme] .form-warning[role="alert"], :root[data-theme] .dashboard-data-error { background: var(--danger-soft); border: 1px solid var(--danger-line); border-radius: 10px; color: var(--danger); padding: 14px 16px; line-height: 1.6; }
+.workflow-callout[data-tone="success"] { background: var(--success-soft); border-color: var(--success-line); color: var(--success); }
+.workflow-callout[data-tone="info"] { background: var(--info-soft); border-color: var(--info-line); color: var(--info); }
+.workflow-review[data-tone="warning"] { border-color: var(--warning-line); box-shadow: inset 3px 0 var(--warning); }
+.workflow-review[data-tone="success"] { border-color: var(--success-line); box-shadow: inset 3px 0 var(--success); }
+.workflow-profit[data-tone="success"] { border-color: var(--success-line); box-shadow: inset 3px 0 var(--success); }
+.workflow-profit[data-tone="danger"] { border-color: var(--danger-line); box-shadow: inset 3px 0 var(--danger); }
+.workflow-table td .semantic-badge { margin-bottom: 7px; }
+.booking-row > .semantic-badge { justify-self: start; }
+.workflow-row-actions { align-items: center; gap: 6px 10px; }
+.workflow-row-actions > button { min-height: 36px; font-size: 12px; }
+.workflow-actions > :is(button,a) { border-radius: 10px; }
+.page-heading { gap: 22px; }
+.panel, .metric-card, .booking-summary-card, .inventory-metric, .equipment-metric, .package-metric { border-radius: 14px; }
+.workflow-table th { background: var(--canvas); letter-spacing: .025em; }
+.workflow-table td { line-height: 1.6; }
+.workflow-table tbody tr { transition: background-color .15s; }
+.workflow-table tbody tr:hover { background: color-mix(in srgb,var(--canvas),var(--surface) 45%); }
+.workflow-table td:has(.money-positive), .workflow-amount { font-variant-numeric: tabular-nums; }
+.workflow-table button { margin-top: 5px; }
+.money-out { color: var(--warning); }
+.workflow-crm .panel-heading { align-items: start; gap: 16px; }
+.client-message-templates .workflow-actions { margin-top: 20px; }
+.client-message-templates textarea { background: var(--canvas); }
+.primary-button svg, .secondary-button svg { flex: 0 0 auto; }
+.invoice-paper { border-radius: 4px; }
+@media(max-width:620px) { .workflow-actions { gap: 8px; } .semantic-badge { font-size: 11px; padding: 5px 8px; } .workflow-row-actions > button { min-height: 40px; } }
+@media(prefers-reduced-motion:reduce) { .semantic-loading::before { animation: none; } }
+
+:root[data-theme] .text-button[data-intent] { border: 1px solid; border-radius: 8px; padding: 6px 10px; text-decoration: none; }
+.report-kpi { border-top: 3px solid var(--neutral-line); }
+.report-kpi[data-tone="success"] { border-top-color: var(--success); }
+.report-kpi[data-tone="warning"] { border-top-color: var(--warning); }
+.report-kpi[data-tone="danger"] { border-top-color: var(--danger); }
+.report-kpi[data-tone="info"] { border-top-color: var(--info); }
+.booking-mobile-summary { display: none; }
+.booking-row > span:nth-child(5) small { display: block; color: var(--muted); margin-top: 4px; font-size: 12px; }
+.booking-row > * { min-width: 0; overflow-wrap: anywhere; }
+.booking-row .workflow-row-actions button { white-space: normal; }
+@media(min-width:901px) { .booking-row,.booking-table-head { grid-template-columns:1.2fr 1fr 1.1fr .85fr 1.05fr .85fr 1fr; gap:12px; } }
+@media(max-width:620px) { .booking-mobile-summary { display:block; color:var(--muted); font-size:12px; line-height:1.6; } .booking-row .workflow-row-actions { flex-direction:column; align-items:stretch; } }

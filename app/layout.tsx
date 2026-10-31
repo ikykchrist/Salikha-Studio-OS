@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import "./workflow.css";
 import "./dark-mode.css";
+import "./semantic-ui.css";
 import Script from "next/script";
 import { PwaRegister } from "./pwa-register";
 

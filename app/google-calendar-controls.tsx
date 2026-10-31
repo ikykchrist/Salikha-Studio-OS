@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { StatusBadge } from "./status-badge";
 import { CalendarRange, Check, ExternalLink, LoaderCircle, RefreshCw } from "lucide-react";
 
 type Connection = { account_email: string; calendar_id: string; calendar_name: string; connected_at: string };
@@ -8,6 +9,7 @@ type CalendarOption = { id: string; name: string; primary: boolean };
 type SyncHealth = { failed_count: number; last_synced_at: string | null; last_error: string | null };
 
 export function GoogleCalendarControls() {
+  const [checking,setChecking] = useState(true);
   const [configured, setConfigured] = useState(false);
   const [connection, setConnection] = useState<Connection | null>(null);
   const [syncHealth, setSyncHealth] = useState<SyncHealth | null>(null);
@@ -29,7 +31,7 @@ export function GoogleCalendarControls() {
     if (result.connection) setCalendarId(result.connection.calendar_id);
     return result.connection as Connection | null;
   }, []);
-  useEffect(() => { void refresh().catch((cause) => setError(cause instanceof Error ? cause.message : "Calendar status unavailable.")); }, [refresh]);
+  useEffect(() => { void refresh().catch((cause) => setError(cause instanceof Error ? cause.message : "Calendar status unavailable.")).finally(()=>setChecking(false)); }, [refresh]);
   useEffect(() => {
     if (!connection) return;
     let cancelled = false;
@@ -65,13 +67,16 @@ export function GoogleCalendarControls() {
     } catch (cause) { setCalendarId(connection?.calendar_id || ""); setError(cause instanceof Error ? cause.message : "Could not select that calendar."); }
     finally { setBusy(false); }
   };
+  if(checking)return <section className="calendar-status semantic-loading" role="status">Checking Google Calendar connection…</section>;
+  if(error&&!connection&&!configured)return <section className="calendar-status"><p className="form-warning" role="alert">{error}</p><button className="secondary-button" onClick={()=>{setChecking(true);setError("");void refresh().catch(c=>setError(c instanceof Error?c.message:"Calendar status unavailable.")).finally(()=>setChecking(false));}}>Retry connection check</button></section>;
   return <section className="calendar-status">
     <div className="calendar-status-icon"><CalendarRange aria-hidden="true" /></div>
     <div className="google-calendar-copy"><strong>{connection ? "Google Calendar connected" : configured ? "Google Calendar is ready to connect" : "Google Calendar needs OAuth setup"}</strong><span>{connection ? connection.account_email + " · " + connection.calendar_name : configured ? "Connect the studio Google account to enable booking sync." : "Complete Google OAuth setup in Settings to enable booking sync."}</span>
       {connection && <div className="google-calendar-target"><label htmlFor="google-calendar-target">Target calendar</label><select id="google-calendar-target" value={calendarId} onChange={(event) => void chooseCalendar(event)} disabled={busy}>{calendars.map((item) => <option key={item.id} value={item.id}>{item.name}{item.primary ? " · Primary" : ""}</option>)}</select></div>}
-      {connection && <small className={syncHealth?.failed_count ? "google-calendar-error" : "google-calendar-message"} role="status">{syncHealth?.failed_count ? syncHealth.failed_count + " pending event(s) failed sync · " + (syncHealth.last_error || "retry with Sync now") : "Sync health: healthy"}{syncHealth?.last_synced_at ? " · Last sync " + new Date(syncHealth.last_synced_at).toLocaleString("en-PH", { timeZone: "Asia/Manila" }) : ""}</small>}
+      {connection && <StatusBadge status={syncHealth?.failed_count?"FAILED":syncHealth?.last_synced_at?"HEALTHY":"PENDING"} label={syncHealth?.failed_count?"Sync needs attention":syncHealth?.last_synced_at?"Sync healthy":"Ready to sync"}/>}
+      {connection && <small className={syncHealth?.failed_count ? "google-calendar-error" : "google-calendar-message"} role="status">{syncHealth?.failed_count ? syncHealth.failed_count + " pending event(s) failed sync · " + (syncHealth.last_error || "retry with Sync now") : syncHealth?.last_synced_at ? "Sync health: healthy" : "No completed sync recorded yet"}{syncHealth?.last_synced_at ? " · Last sync " + new Date(syncHealth.last_synced_at).toLocaleString("en-PH", { timeZone: "Asia/Manila" }) : ""}</small>}
       {message && <small className="google-calendar-message" role="status"><Check aria-hidden="true" />{message}</small>}{error && <small className="google-calendar-error" role="alert">{error}</small>}
     </div>
-    {connection ? <button className="secondary-button" type="button" onClick={() => void sync()} disabled={busy}>{busy ? <LoaderCircle className="recipe-spinner" aria-hidden="true" /> : <RefreshCw aria-hidden="true" />}{busy ? "Syncing…" : "Sync now"}</button> : configured ? <a className="primary-button" href="/api/google-calendar/connect"><ExternalLink aria-hidden="true" /> Connect Google account</a> : <button className="secondary-button" type="button" onClick={() => { window.localStorage.setItem("salikha-active-view", "Settings"); window.location.reload(); }}>Set up in Settings</button>}
+    {connection ? <button className="secondary-button" data-intent="info" type="button" onClick={() => void sync()} disabled={busy}>{busy ? <LoaderCircle className="recipe-spinner" aria-hidden="true" /> : <RefreshCw aria-hidden="true" />}{busy ? "Syncing…" : "Sync now"}</button> : configured ? <a className="primary-button" href="/api/google-calendar/connect"><ExternalLink aria-hidden="true" /> Connect Google account</a> : <button className="secondary-button" type="button" onClick={() => { window.localStorage.setItem("salikha-active-view", "Settings"); window.location.reload(); }}>Set up in Settings</button>}
   </section>;
 }
