@@ -130,3 +130,5 @@
   .booking-summary-card strong { font-size: 23px; letter-spacing: -.6px; overflow-wrap: break-word; }
   .booking-list .booking-row { padding: 16px; gap: 14px; }
 }
+
+.ledger-running-balance { font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; color: var(--ink); background: color-mix(in srgb,var(--info-soft),transparent 65%); }
