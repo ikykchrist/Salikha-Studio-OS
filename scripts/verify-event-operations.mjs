@@ -1,0 +1,14 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+import {stripTypeScriptTypes} from 'node:module';
+const load=async path=>import('data:text/javascript;base64,'+Buffer.from(stripTypeScriptTypes(fs.readFileSync(path,'utf8').replace(/^import type .*;\r?\n/gm,''))).toString('base64'));
+const {eventProfit}=await load('lib/event-profit.ts');const {preparationReady,preparationProgress}=await load('lib/booking-preparation.ts');
+const b={id:'event',event_name:'Event',client_name:'Client',event_date:'2026-11-01',status:'DONE',total_amount:5500,paid_amount:1000,consumables_reconciled_at:'2026-11-01'};
+const cost=(id,amount,extra={})=>({id,booking_id:'event',amount,status:'PENDING',classification:'DIRECT',accounting_treatment:'EXPENSE',category:'Transportation',description:id,expense_date:'2026-11-01',...extra});
+const source={bookings:[b],expenses:[cost('transport',500),cost('salary',1000),cost('legacy-consumables',300,{category:'Consumables'}),cost('void',999,{status:'VOIDED'}),cost('overhead',800,{classification:'OPERATING'}),cost('stock-purchase',300,{accounting_treatment:'INVENTORY_PURCHASE'})],movements:[{id:'used',booking_id:'event',movement_type:'USAGE',quantity:3,unit_cost:100,item_name:'Paper',movement_date:'2026-11-01'},{id:'returned',booking_id:'event',movement_type:'RETURN',quantity:1,unit_cost:100,item_name:'Paper',movement_date:'2026-11-02'}]};
+let r=eventProfit(source,'event');assert.equal(r.directCosts,1700);assert.equal(r.profit,3800);assert.equal(r.collected,1000);assert.equal(r.earned,true);assert.equal(r.closedOut,true);
+r=eventProfit({...source,bookings:[{...b,status:'PENDING',consumables_reconciled_at:null}]},'event');assert.equal(r.earned,false);assert.equal(r.closedOut,false);
+r=eventProfit({...source,bookings:[{...b,status:'CANCELLED'}]},'event');assert.equal(r.revenue,0);assert.equal(r.profit,-1700);assert.equal(r.margin,null);
+assert.equal(eventProfit(source,'missing'),null);
+const prep={layoutReady:true,venueReady:true,backdropColor:'Red',suppliesPacked:true,equipmentChecked:true,operatorName:'Operator'};assert(preparationReady(prep));assert.equal(preparationProgress(prep),6);assert(!preparationReady({...prep,operatorName:' '}));assert.equal(preparationProgress({layoutReady:true,venueReady:false,backdropColor:null}),1);
+console.log('PASS: event profit excludes overhead, voids and stock purchases; counts unpaid costs; nets stock returns; avoids duplicate consumables; separates collections; handles pending/cancelled/missing bookings and checklist readiness. No database writes.');

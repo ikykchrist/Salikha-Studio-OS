@@ -9,7 +9,10 @@ async function ensurePreparationColumns() {
     alter table public.bookings
       add column if not exists preparation_layout_ready boolean not null default false,
       add column if not exists preparation_venue_ready boolean not null default false,
-      add column if not exists preparation_backdrop_color text
+      add column if not exists preparation_backdrop_color text,
+      add column if not exists preparation_supplies_packed boolean not null default false,
+      add column if not exists preparation_equipment_checked boolean not null default false,
+      add column if not exists preparation_operator_name text
   `);
 }
 
@@ -24,22 +27,29 @@ export async function POST(request: Request) {
   const color = typeof body.backdropColor === "string" && body.backdropColor.trim() ? body.backdropColor.trim() : null;
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) return Response.json({ error: "A valid booking ID is required." }, { status: 400 });
   if (color && (color.length > 80 || /[\u0000-\u001f]/.test(color))) return Response.json({ error: "Backdrop color must be 80 characters or fewer." }, { status: 400 });
+  const operatorName=typeof body.operatorName==="string"?body.operatorName.trim():"";
+  if(operatorName.length>120)return Response.json({error:"Operator name must be 120 characters or fewer."},{status:400});
   try {
     await ensurePreparationColumns();
     const result = await getLocalPostgresPool().query(
       `update public.bookings
           set preparation_layout_ready = $2::boolean,
               preparation_venue_ready = $3::boolean,
-              preparation_backdrop_color = $4::text,
+              preparation_backdrop_color = $4::text, preparation_supplies_packed=$5, preparation_equipment_checked=$6, preparation_operator_name=$7,
               updated_at = now()
         where id = $1::uuid
         returning id, preparation_layout_ready as "layoutReady",
                   preparation_venue_ready as "venueReady",
-                  preparation_backdrop_color as "backdropColor"`,
-      [id, layoutReady, venueReady, color],
+                  preparation_backdrop_color as "backdropColor", preparation_supplies_packed as "suppliesPacked", preparation_equipment_checked as "equipmentChecked", preparation_operator_name as "operatorName"`,
+      [id, layoutReady, venueReady, color, body.suppliesPacked===true, body.equipmentChecked===true, operatorName||null],
     );
     if (!result.rowCount) return Response.json({ error: "Booking not found." }, { status: 404 });
     const preparation = result.rows[0];
-    return Response.json({ preparation, readyForDeployment: preparation.layoutReady && preparation.venueReady && Boolean(preparation.backdropColor) });
+    return Response.json({ preparation, readyForDeployment: preparation.layoutReady && preparation.venueReady && Boolean(preparation.backdropColor) && preparation.suppliesPacked && preparation.equipmentChecked && Boolean(preparation.operatorName) });
   } catch (error) { return Response.json({ error: error instanceof Error ? error.message : "Could not save preparation checklist." }, { status: 500 }); }
+}
+
+export async function GET(request:Request){
+ const auth=await requireUser(request,true);if(auth.response)return auth.response;
+ try{await ensurePreparationColumns();const result=await getLocalPostgresPool().query(`select id,preparation_layout_ready as "layoutReady",preparation_venue_ready as "venueReady",preparation_backdrop_color as "backdropColor",preparation_supplies_packed as "suppliesPacked",preparation_equipment_checked as "equipmentChecked",preparation_operator_name as "operatorName" from public.bookings`);return Response.json({data:result.rows},{headers:{'cache-control':'no-store'}});}catch{return Response.json({error:'Preparation checklist could not load.'},{status:503});}
 }

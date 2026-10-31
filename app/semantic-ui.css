@@ -170,3 +170,7 @@
 @keyframes salikha-toast-in {from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:translateY(0);}}
 @media(max-width:600px){.success-toast-stack{right:16px;bottom:max(16px,env(safe-area-inset-bottom));}.closeout-success{padding:26px 18px!important;}.closeout-success-actions button{flex:1;justify-content:center;}.closeout-confirmations>div{padding:12px;gap:9px;}}
 @media(prefers-reduced-motion:reduce){.closeout-success,.closeout-medal,.success-toast{animation:none;}.closeout-confetti{display:none;}}
+.event-profit-total {display:flex;gap:16px;padding:22px;border-radius:16px;background:var(--success-soft);color:var(--success);border:1px solid var(--success-line);margin:20px 0;}
+.event-profit-total[data-tone="danger"] {background:var(--danger-soft);color:var(--danger);border-color:var(--danger-line);}
+.event-profit-total div {display:grid;gap:7px;}.event-profit-total strong {font-size:32px;line-height:1.2;}.event-profit-total small,.event-profit-total span {font-size:13px;}
+.event-profit-costs>div {display:flex;justify-content:space-between;gap:16px;border-bottom:1px solid var(--line);padding:14px 0;}.event-profit-costs span {min-width:0;}.event-profit-costs strong {display:block;font-size:14px;overflow-wrap:anywhere;}.event-profit-costs small {display:block;color:var(--muted);font-size:12px;margin-top:5px;}.event-profit-costs b {white-space:nowrap;font-size:14px;}

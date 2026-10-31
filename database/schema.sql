@@ -457,3 +457,8 @@ alter table public.client_activities enable row level security;
 create index if not exists cash_transactions_booking_idx on public.cash_transactions(booking_id);
 create index if not exists cash_transactions_expense_idx on public.cash_transactions(expense_id);
 commit;
+-- Additive preparation checklist fields. No stock or financial mutations.
+alter table public.bookings
+ add column if not exists preparation_supplies_packed boolean not null default false,
+ add column if not exists preparation_equipment_checked boolean not null default false,
+ add column if not exists preparation_operator_name text;
