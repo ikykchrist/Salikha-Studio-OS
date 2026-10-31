@@ -64,6 +64,17 @@
 @media(max-width:620px) { .booking-mobile-summary { display:block; color:var(--muted); font-size:12px; line-height:1.6; } .booking-row .workflow-row-actions { flex-direction:column; align-items:stretch; } }
 
 /* Booking cards replace the compressed desktop register on phones and tablets. */
+.booking-overlay.closeout-overlay { inset: 0; z-index: 1200; display: flex; align-items: center; justify-content: center; padding: 20px; outline: none; }
+.closeout-overlay .reconciliation-dialog { width: 100%; max-width: 720px; max-height: calc(100dvh - 40px); margin: 0; min-height: 0; }
+.closeout-overlay .drawer-header, .closeout-overlay .drawer-footer { flex: 0 0 auto; }
+.closeout-overlay .calendar-setup-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+@media(max-width:620px) {
+  .booking-overlay.closeout-overlay { padding: 12px; }
+  .closeout-overlay .reconciliation-dialog { max-height: calc(100dvh - 24px); }
+  .closeout-overlay .form-grid { grid-template-columns: 1fr; }
+  .closeout-overlay .drawer-footer { gap: 8px; flex-wrap: wrap; }
+  .closeout-overlay .drawer-footer button { min-height: 44px; flex: 1; }
+}
 @media (max-width: 900px) {
   .booking-table-panel { background: transparent; border: 0; box-shadow: none; padding: 0; overflow: visible; }
   :root[data-theme="dark"] .booking-table-panel { background: transparent; border: 0; box-shadow: none; }

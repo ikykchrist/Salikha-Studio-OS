@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Check, LoaderCircle, X } from "lucide-react";
 
 type RecipeLine = { inventoryItemId: string; itemName: string; unit: string; quantity: string; onHand: string; unitCost: string; pcsPerUnit: string; pieceCost: string };
@@ -9,6 +10,23 @@ export type Closeout = { lines: Usage[]; transportCost: number; operatorSalary: 
 const peso = (value: number) => `₱${value.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export function BookingReconciliationForm({ bookingId, packageId, bookingName, onClose, onSave }: { bookingId: string; packageId: string | null; bookingName: string; onClose: () => void; onSave: (closeout: Closeout) => void | Promise<void> }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useEffect(()=>{
+    const previous=document.activeElement as HTMLElement|null;
+    const overflow=document.body.style.overflow;
+    document.body.style.overflow='hidden';
+    dialogRef.current?.focus();
+    const trap=(event:KeyboardEvent)=>{
+      if(event.key!=='Tab')return;
+      const items=Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"]')||[]);
+      const first=items[0],last=items[items.length-1];
+      if(!first){event.preventDefault();return;}
+      if(event.shiftKey&&(document.activeElement===first||document.activeElement===dialogRef.current)){event.preventDefault();last.focus();}
+      else if(!event.shiftKey&&(document.activeElement===last||document.activeElement===dialogRef.current)){event.preventDefault();first.focus();}
+    };
+    document.addEventListener('keydown',trap);
+    return()=>{document.body.style.overflow=overflow;document.removeEventListener('keydown',trap);if(previous?.isConnected)previous.focus();};
+  },[bookingId]);
   const [recipe, setRecipe] = useState<RecipeLine[]>([]);
   const [quantities, setQuantities] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(!!packageId);
@@ -34,5 +52,6 @@ export function BookingReconciliationForm({ bookingId, packageId, bookingName, o
     finally { setSaving(false); }
   };
 
-  return <div className="booking-overlay" role="dialog" aria-modal="true" aria-labelledby="reconciliation-title"><div className="calendar-setup-dialog reconciliation-dialog"><div className="drawer-header"><div><p className="eyebrow">Event closeout</p><h2 id="reconciliation-title">Record actual usage</h2><small>{bookingName}</small></div><button className="close-button" type="button" onClick={onClose} aria-label="Close reconciliation"><X aria-hidden="true" /></button></div><div className="calendar-setup-body"><p className="subheading">Enter actual inventory consumed (not stock packed for the event). Transport and salary entered here become unpaid costs; pay them once from Cashflow → Unpaid bills. Leave costs blank if already recorded.</p>{loading ? <p><LoaderCircle aria-hidden="true" /> Loading package recipe…</p> : recipe.length === 0 ? <p>No recipe ingredients are configured. You can still record event costs and finish closeout.</p> : <div className="form-grid">{recipe.map((line) => <label className="wide-field" key={line.inventoryItemId}>{line.itemName} · {line.unit}<input type="number" min="0" max={line.onHand} step="0.001" value={quantities[line.inventoryItemId] ?? line.quantity} onChange={(event) => setQuantities((current) => ({ ...current, [line.inventoryItemId]: event.target.value }))} /><small>Recipe: {line.quantity} {line.unit} · {line.pcsPerUnit} pcs/{line.unit} · {peso(Number(line.pieceCost))}/piece · {peso(Number(line.unitCost))}/{line.unit}</small><small>Estimated cost: {peso((Number(quantities[line.inventoryItemId] || 0) * Number(line.unitCost)))}</small></label>)}</div>}<div className="form-grid closeout-costs"><label>Actual transportation cost<div className="money-input"><span>₱</span><input type="number" min="0" step="0.01" value={transportCost} onChange={(event) => setTransportCost(event.target.value)} placeholder="0.00 (optional)" /></div></label><label>Operator salary<div className="money-input"><span>₱</span><input type="number" min="0" step="0.01" value={operatorSalary} onChange={(event) => setOperatorSalary(event.target.value)} placeholder="0.00 (optional)" /></div></label></div>{error && <p className="recipe-message recipe-error" role="alert">{error}</p>}</div><div className="drawer-footer"><button className="secondary-button" type="button" onClick={onClose} disabled={saving}>Cancel</button><button className="primary-button" type="button" onClick={() => void save()} disabled={loading || saving}><Check aria-hidden="true" /> {saving ? "Saving…" : "Save and finish"}</button></div></div></div>;
+  if(typeof document === "undefined")return null;
+  return createPortal(<div ref={dialogRef} tabIndex={-1} className="booking-overlay closeout-overlay" role="dialog" aria-modal="true" aria-labelledby="reconciliation-title"><div className="calendar-setup-dialog reconciliation-dialog"><div className="drawer-header"><div><p className="eyebrow">Event closeout</p><h2 id="reconciliation-title">Event closeout</h2><small>{bookingName}</small></div><button className="close-button" type="button" onClick={onClose} aria-label="Close reconciliation"><X aria-hidden="true" /></button></div><div className="calendar-setup-body"><p className="subheading">Enter actual inventory consumed (not stock packed for the event). Transport and salary entered here become unpaid costs; pay them once from Cashflow → Unpaid bills. Leave costs blank if already recorded.</p>{loading ? <p><LoaderCircle aria-hidden="true" /> Loading package recipe…</p> : recipe.length === 0 ? <p>No recipe ingredients are configured. You can still record event costs and finish closeout.</p> : <div className="form-grid">{recipe.map((line) => <label className="wide-field" key={line.inventoryItemId}>{line.itemName} · {line.unit}<input type="number" min="0" max={line.onHand} step="0.001" value={quantities[line.inventoryItemId] ?? line.quantity} onChange={(event) => setQuantities((current) => ({ ...current, [line.inventoryItemId]: event.target.value }))} /><small>Recipe: {line.quantity} {line.unit} · {line.pcsPerUnit} pcs/{line.unit} · {peso(Number(line.pieceCost))}/piece · {peso(Number(line.unitCost))}/{line.unit}</small><small>Estimated cost: {peso((Number(quantities[line.inventoryItemId] || 0) * Number(line.unitCost)))}</small></label>)}</div>}<div className="form-grid closeout-costs"><label>Actual transportation cost<div className="money-input"><span>₱</span><input type="number" min="0" step="0.01" value={transportCost} onChange={(event) => setTransportCost(event.target.value)} placeholder="0.00 (optional)" /></div></label><label>Operator salary<div className="money-input"><span>₱</span><input type="number" min="0" step="0.01" value={operatorSalary} onChange={(event) => setOperatorSalary(event.target.value)} placeholder="0.00 (optional)" /></div></label></div>{error && <p className="recipe-message recipe-error" role="alert">{error}</p>}</div><div className="drawer-footer"><button className="secondary-button" type="button" onClick={onClose} disabled={saving}>Cancel</button><button className="primary-button" type="button" onClick={() => void save()} data-intent="success" disabled={loading || saving}><Check aria-hidden="true" /> {saving ? "Saving…" : "Save and finish"}</button></div></div></div>,document.body);
 }
