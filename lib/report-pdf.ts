@@ -37,6 +37,8 @@ export function financialReportPdf(r:FinancialReport,kind:'cashflow'|'revenue'){
     for(const row of rows){
       const cells=columns.map((col,i)=>wrap(row[i]||'',col.width-8));
       const count=Math.max(...cells.map(c=>c.length));let offset=0;
+      // Keep ordinary rows intact; split only a row taller than a full page.
+      if(count*9+6>y-bottom&&count*9+6<=750-15-bottom){fresh();header();}
       while(offset<count){
         if(y-bottom<16){fresh();header();}
         const take=Math.min(count-offset,Math.max(1,Math.floor((y-bottom-6)/9)));
