@@ -23,7 +23,7 @@ export function buildFinancialReport(source:FinancialSource,from:string,to:strin
   const bookedStock=usages.filter(m=>m.booking_id&&byBooking.get(m.booking_id)?.status==='DONE'&&inRange(stockCostDate(m)));
   const unassignedStock=usages.filter(m=>!m.booking_id&&inRange(m.movement_date));
   const expenseDate=(e:ExpenseRow)=>e.classification==='DIRECT'&&e.booking_id?byBooking.get(e.booking_id)?.event_date||e.expense_date:e.expense_date;
-  const recognized=source.expenses.filter(e=>!['VOIDED','DRAFT'].includes(e.status)&&e.accounting_treatment!=='INVENTORY_PURCHASE'&&inRange(expenseDate(e))&&!(e.booking_id&&e.classification==='DIRECT'&&byBooking.get(e.booking_id)?.status!=='DONE')&&!(e.category==='Consumables'&&e.booking_id&&source.movements.some(m=>m.booking_id===e.booking_id&&m.movement_type==='USAGE')));
+  const recognized=source.expenses.filter(e=>!['VOIDED','DRAFT'].includes(e.status)&&e.accounting_treatment!=='INVENTORY_PURCHASE'&&inRange(expenseDate(e))&&!(e.booking_id&&e.classification==='DIRECT'&&byBooking.get(e.booking_id)?.status!=='DONE')&&!(e.category==='Consumables'&&e.booking_id&&source.movements.some(m=>m.booking_id===e.booking_id&&m.movement_type==='USAGE'&&!m.item_name.startsWith('Estimated ink -'))));
   const revenue=sum(done,b=>cent(b.total_amount));
   const direct=sum(recognized.filter(e=>e.classification==='DIRECT'),e=>cent(e.amount))+sum(bookedStock,movementCost);
   const operating=sum(recognized.filter(e=>e.classification!=='DIRECT'),e=>cent(e.amount))+sum(unassignedStock,movementCost);
@@ -38,6 +38,7 @@ export function buildFinancialReport(source:FinancialSource,from:string,to:strin
     return {id:a.id,name:a.name,opening:before/100,cashIn:incoming/100,cashOut:outgoing/100,closing:(before+incoming-outgoing)/100,reconciledDate:last?.reconciled_date||null,variance:last?Number(last.difference):null,needsReview};
   });
   const warnings:string[]=[];
+  const inkEstimates=bookedStock.filter(m=>m.item_name.startsWith('Estimated ink -')).length;if(inkEstimates)warnings.push(`${inkEstimates} event ink costs use saved consumption assumptions, not measured printer telemetry. Profit includes these estimates.`);
   const legacy=period.filter(t=>t.purpose==='LEGACY').length;
   if(legacy)warnings.push(`${legacy} legacy cash postings need classification and source-document review. They affect cash but are not assumed to be revenue or expenses.`);
   const incomplete=done.filter(b=>!b.consumables_reconciled_at).length;

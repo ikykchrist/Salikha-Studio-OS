@@ -1,0 +1,27 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+import {stripTypeScriptTypes} from 'node:module';
+const read=p=>stripTypeScriptTypes(fs.readFileSync(p,'utf8').replace(/^import .*;\r?\n/gm,''));
+const prefix=`let db;export const setDatabase=value=>db=value;const getLocalPostgresPool=()=>({connect:async()=>db});const ensureInkTracker=async()=>{};const requireUser=async()=>({user:{id:'operator'}});`;
+const m=await import('data:text/javascript;base64,'+Buffer.from(prefix+read('lib/ink-estimate.ts')+read('lib/ink-estimate-store.ts')+read('app/api/booking-consumption/route.ts')).toString('base64'));
+const tanks=['BK','C','M','Y','LC','LM'].map(color=>({color,bottle_ml:70,bottle_price:130,level_percent:100}));
+assert.equal(m.paperSheetCount([{itemName:'4R Paper',unit:'Pack',quantity:1.5},{itemName:'Paper Frame',unit:'Pack',quantity:4}]),30);
+assert.equal(m.paperSheetCount([{itemName:'4R Semigloss',category:'Paper',unit:'Pack',quantity:1}]),20);
+let e=m.estimatePrintInk(20,.2,70,tanks);assert.equal(e.totalMl,4);assert.equal(e.cost,7.43);assert.equal(e.colors[0].afterPercent,99.05);assert.equal(m.estimatePrintInk(0,.2,70,tanks).cost,0);
+assert.equal(m.estimatePrintInk(20,.2,70,tanks.map(t=>({...t,level_percent:null}))).unknownLevels,6);
+assert(m.estimatePrintInk(100,.2,70,tanks.map(t=>({...t,level_percent:1}))).lowEstimate);
+assert.equal(m.estimatePrintInk(20,.2,70,tanks.map(t=>({...t,level_percent:0}))).colors[0].afterPercent,0);
+assert.throws(()=>m.estimatePrintInk(1.2,.2,70,tanks));
+const bookingId='11111111-1111-4111-8111-111111111111',itemId='22222222-2222-4222-8222-222222222222';let calls=[],closed=false;
+m.setDatabase({release(){},async query(sql,args){calls.push({sql,args});if(sql.includes('select id, package_id'))return {rowCount:1,rows:[{id:bookingId,package_id:'package',event_name:'Paper event',event_date:'2026-11-01',status:'DONE',consumables_reconciled_at:closed?'2026-11-01':null}]};if(sql.includes('select inventory_item_id'))return {rows:[{inventory_item_id:itemId}]};if(sql.includes('select id, name, category'))return {rowCount:1,rows:[{id:itemId,name:'4R Paper',category:'Paper',unit:'Pack',on_hand:10,average_unit_cost:100,pcs_per_unit:20}]};if(sql.includes('select * from public.printer_ink_profiles'))return {rowCount:1,rows:[{ml_per_sheet:.2,reference_capacity_ml:70}]};if(sql.includes('select * from public.printer_ink_tanks'))return {rows:tanks};if(sql.includes('sum(amount)'))return {rows:[{amount:5500}]};if(sql.includes('update public.bookings'))closed=true;return {rowCount:1,rows:[]};}});
+const request=()=>new Request('http://localhost/api/booking-consumption',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({bookingId,lines:[{inventoryItemId:itemId,quantity:1}],transportCost:200,operatorSalary:500,printerNo:2})});
+const r=await m.POST(request()),result=await r.json();assert.equal(r.status,200);assert.equal(result.estimatedInk.sheets,20);assert.equal(result.estimatedInk.cost,7.43);assert.equal(result.consumablesCost,107.43);assert.equal(result.totalDirectCosts,807.43);assert.equal(calls.filter(c=>c.sql.startsWith('update public.printer_ink_tanks')).length,6);assert(calls.filter(c=>c.sql.startsWith('update public.printer_ink_tanks')).every(c=>c.args[0]===2));assert(!calls.some(c=>c.sql.includes('insert into public.cash_transactions')));assert(calls.some(c=>c.sql==='commit'));
+calls=[];assert.equal((await m.POST(request())).status,409);assert(!calls.some(c=>c.sql.startsWith('update public.printer_ink_tanks')));
+console.log('PASS: 20 sheets/pack, 4 mL and PHP 7.43 per pack; six-color estimates, unknown levels, zero/low levels, selected-printer deduction, committed event costs, no cash posting, and no duplicate closeout. No database used.');
+// Ink-only usage must not suppress an existing consumables expense.
+const finance=await import('data:text/javascript;base64,'+Buffer.from(read('lib/financial-report.ts')+read('lib/event-profit.ts')).toString('base64'));
+const source={accounts:[],transactions:[],bookings:[{id:'event',event_name:'Event',event_date:'2026-11-01',client_name:'Client',package_name:'Photo',status:'DONE',total_amount:100,paid_amount:0,consumables_reconciled_at:'2026-11-01'}],expenses:[{id:'expense',booking_id:'event',description:'Recorded paper cost',expense_date:'2026-11-01',amount:25,status:'PENDING',classification:'DIRECT',category:'Consumables',accounting_treatment:'EXPENSE'}],movements:[{id:'ink',booking_id:'event',movement_date:'2026-11-01',movement_type:'USAGE',quantity:1,unit_cost:7.43,item_name:'Estimated ink - Printer 1 - 20 4R sheets'}],reconciliations:[]};
+assert.equal(finance.eventProfit(source,'event').directCosts,32.43);assert.equal(finance.buildFinancialReport(source,'2026-11-01','2026-11-01').directCosts,32.43);
+source.movements.push({id:'paper',booking_id:'event',movement_date:'2026-11-01',movement_type:'USAGE',quantity:1,unit_cost:10,item_name:'4R Paper'});
+assert.equal(finance.eventProfit(source,'event').directCosts,17.43);assert.equal(finance.buildFinancialReport(source,'2026-11-01','2026-11-01').directCosts,17.43);
+console.log('PASS: estimated ink feeds event profit and reports without suppressing unrelated paper expense or double-counting physical stock.');

@@ -14,7 +14,7 @@ type RecipeRequest = { packageId: unknown; lines: unknown };
 async function getRecipe(client: Pick<PoolClient, "query">, packageId: string) {
   const { rows } = await client.query(
     `select r.id, r.inventory_item_id as "inventoryItemId", i.name as "itemName",
-            i.unit, r.quantity::text as quantity, i.on_hand::text as "onHand",
+            i.unit, i.category, r.quantity::text as quantity, i.on_hand::text as "onHand",
             i.average_unit_cost::text as "unitCost", i.pcs_per_unit::text as "pcsPerUnit",
             (i.average_unit_cost / i.pcs_per_unit)::text as "pieceCost",
             (r.quantity * i.average_unit_cost)::text as "lineCost", i.is_active as active

@@ -1,5 +1,8 @@
 import { getLocalPostgresPool } from "../../../lib/local-postgres";
 import type { PoolClient } from "pg";
+import {ensureInkTracker} from "../../../lib/printer-ink-store";
+import {paperSheetCount} from "../../../lib/ink-estimate";
+import {recordEstimatedInk} from "../../../lib/ink-estimate-store";
 import { requireUser } from "../../../lib/auth";
 
 export const runtime = "nodejs";
@@ -12,7 +15,7 @@ type Line = { inventoryItemId: unknown; quantity: unknown };
 export async function POST(request: Request) {
   const auth = await requireUser(request);
   if (auth.response) return auth.response;
-  let body: { bookingId?: unknown; lines?: unknown; transportCost?: unknown; operatorSalary?: unknown };
+  let body: { bookingId?: unknown; lines?: unknown; transportCost?: unknown; operatorSalary?: unknown; printerNo?:unknown; printedSheets?:unknown };
   try { body = await request.json(); } catch { return Response.json({ error: "Request body must be valid JSON." }, { status: 400 }); }
   if (typeof body.bookingId !== "string" || !uuidPattern.test(body.bookingId)) return Response.json({ error: "A valid bookingId is required." }, { status: 400 });
   if (!Array.isArray(body.lines) || body.lines.length > 100) return Response.json({ error: "Usage must contain at most 100 lines." }, { status: 400 });
@@ -31,11 +34,12 @@ export async function POST(request: Request) {
     lines.push({ inventoryItemId: raw.inventoryItemId, quantity: Number(quantity) });
   }
 
+  await ensureInkTracker();
   const client: PoolClient = await getLocalPostgresPool().connect();
   try {
     await client.query("begin");
     const bookingResult = await client.query(
-      "select id, package_id, event_name, event_date, status, consumables_reconciled_at from public.bookings where id = $1 for update",
+      "select id, package_id, event_name, event_date::text as event_date, status, consumables_reconciled_at from public.bookings where id = $1 for update",
       [body.bookingId],
     );
     if (!bookingResult.rowCount) { await client.query("rollback"); return Response.json({ error: "Booking not found." }, { status: 404 }); }
@@ -48,15 +52,17 @@ export async function POST(request: Request) {
     if (lines.some((line) => !allowed.has(line.inventoryItemId))) { await client.query("rollback"); return Response.json({ error: "Usage must contain only ingredients in this package recipe." }, { status: 400 }); }
 
     let totalCost = 0;
+    const paperLines:{itemName:string;unit:string;quantity:number;category:string}[]=[];
     for (const line of lines) {
       if (line.quantity === 0) continue;
       const itemResult = await client.query(
-        "select id, name, unit, on_hand, average_unit_cost, pcs_per_unit from public.inventory_items where id = $1 and is_active for update",
+        "select id, name, category, unit, on_hand, average_unit_cost, pcs_per_unit from public.inventory_items where id = $1 and is_active for update",
         [line.inventoryItemId],
       );
       if (!itemResult.rowCount) { await client.query("rollback"); return Response.json({ error: "An ingredient is missing or inactive." }, { status: 409 }); }
       const item = itemResult.rows[0];
       const quantity = Number(line.quantity);
+      paperLines.push({itemName:item.name,unit:item.unit,quantity,category:item.category});
       const stock = Number(item.on_hand);
       if (quantity > stock) { await client.query("rollback"); return Response.json({ error: `Not enough ${item.name}: ${stock} ${item.unit} available.` }, { status: 409 }); }
       const unitCost = Number(item.average_unit_cost);
@@ -74,16 +80,21 @@ export async function POST(request: Request) {
       );
 
     }
+    const printedSheets=body.printedSheets===undefined?paperSheetCount(paperLines):Number(body.printedSheets);
+    if(!Number.isInteger(printedSheets)||printedSheets<0||printedSheets>1000000)throw Error('Enter a whole number of printed sheets. One paper pack contains 20 sheets.');
+    if(printedSheets>0&&lines.some(line=>line.quantity>0)&&paperLines.some(line=>(/ink|tinta/i.test(line.itemName)||line.category==='Ink')))throw Error('Ink already appears in this recipe. Set printed sheets to 0 to use recipe ink costing, or remove the ink recipe line to use automatic estimation.');
+    const estimatedInk=printedSheets>0?await recordEstimatedInk(client,booking,Number(body.printerNo),printedSheets,auth.user!.id):null;
+    totalCost+=estimatedInk?.cost||0;
     const directCosts = [[transportCost, "Transportation", "Actual transportation cost"], [operatorSalary, "Operator salary", "Operator salary"]] as const;
     for (const [amount, category, description] of directCosts) if (amount > 0) {
       await client.query("insert into public.expenses (booking_id, description, amount, expense_date, category, classification, account, status) values ($1, $2, $3, $4::date, $5, 'DIRECT', 'Unassigned', 'PENDING') returning id", [booking.id, `${description} — ${booking.event_name}`, amount, booking.event_date, category]);
 
     }
     await client.query("update public.bookings set actual_transport_cost = $2::numeric, operator_salary = $3::numeric, consumables_reconciled_at = now(), updated_at = now() where id = $1", [booking.id, transportCost, operatorSalary]);
-    await client.query("insert into public.audit_logs(actor_id,action,entity_type,entity_id,metadata) values($1,'BOOKING_CLOSEOUT','bookings',$2,$3::jsonb)", [auth.user!.id,booking.id,JSON.stringify({consumablesCost:totalCost,transportCost,operatorSalary})]);
+    await client.query("insert into public.audit_logs(actor_id,action,entity_type,entity_id,metadata) values($1,'BOOKING_CLOSEOUT','bookings',$2,$3::jsonb)", [auth.user!.id,booking.id,JSON.stringify({consumablesCost:totalCost,transportCost,operatorSalary,estimatedInk})]);
     const receipts = await client.query("select coalesce(sum(amount),0) as amount from public.cash_transactions where booking_id=$1 and purpose='BOOKING_RECEIPT' and direction='INFLOW' and status='POSTED'", [booking.id]);
     await client.query("commit");
-    return Response.json({ ok: true, recordedReceipts: Number(receipts.rows[0].amount), inventoryItemsUpdated: lines.filter(line=>line.quantity>0).length, unpaidCosts: Number((transportCost+operatorSalary).toFixed(2)), consumablesCost: Number(totalCost.toFixed(2)), transportationCost: transportCost, operatorSalary, totalDirectCosts: Number((totalCost + transportCost + operatorSalary).toFixed(2)) });
+    return Response.json({ ok: true, estimatedInk:estimatedInk?{sheets:estimatedInk.sheets,totalMl:estimatedInk.totalMl,cost:estimatedInk.cost,printerNo:estimatedInk.printerNo,unknownLevels:estimatedInk.unknownLevels,lowEstimate:estimatedInk.lowEstimate}:null, recordedReceipts: Number(receipts.rows[0].amount), inventoryItemsUpdated: lines.filter(line=>line.quantity>0).length, unpaidCosts: Number((transportCost+operatorSalary).toFixed(2)), consumablesCost: Number(totalCost.toFixed(2)), transportationCost: transportCost, operatorSalary, totalDirectCosts: Number((totalCost + transportCost + operatorSalary).toFixed(2)) });
   } catch (error) {
     await client.query("rollback").catch(() => undefined);
     return Response.json({ error: error instanceof Error ? error.message : "Could not record booking usage." }, { status: 500 });
