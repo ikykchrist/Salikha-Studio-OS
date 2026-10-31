@@ -178,3 +178,19 @@
 @media(max-width:1200px){.printer-ink-grid {grid-template-columns:1fr;}.ink-tank-glass {height:150px;}.ink-color-name{min-height:0;}.ink-tank-button small{min-height:0;}}
 @media(max-width:600px){.printer-ink-heading{flex-direction:column;gap:12px;}.printer-ink-card{padding:18px;}.ink-tanks{grid-template-columns:repeat(3,minmax(0,1fr));gap:20px 14px;}.ink-tank-glass{height:125px;}.ink-tank-button small{font-size:10px;}.ink-refill-button{font-size:12px;min-height:36px;}.ink-color-name{font-size:12px;}.ink-estimate-tag{margin-left:0;}.ink-reference{font-size:12px;}.ink-history summary{flex-wrap:wrap;}}
 @media(prefers-reduced-motion:reduce){.ink-tank-liquid{transition:none;}}
+/* Compact single-printer view. */
+.printer-ink-toggle {display:inline-flex;gap:4px;padding:4px;border:1px solid var(--line);border-radius:11px;background:var(--canvas);margin-bottom:14px;}
+.printer-ink-toggle button {display:inline-flex;align-items:center;gap:7px;border:0;border-radius:8px;background:transparent;color:var(--muted);padding:9px 16px;min-height:38px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;}
+.printer-ink-toggle button[aria-pressed="true"] {background:var(--accent);color:white;box-shadow:0 2px 5px #0002;}
+.printer-ink-toggle button:focus-visible {outline:2px solid var(--ink);outline-offset:2px;}
+.printer-ink-workspace .printer-ink-grid {grid-template-columns:minmax(0,1fr);}
+.printer-ink-workspace .printer-ink-card {padding:18px 22px;}
+.printer-ink-workspace .ink-tanks {max-width:600px;margin:16px auto 0;gap:12px;}
+.printer-ink-workspace .ink-tank-glass {height:92px;width:44px;margin:0 auto;border-radius:8px 8px 12px 12px;}
+.printer-ink-workspace .ink-tank-glass strong {font-size:10px;padding:3px 4px;}
+.printer-ink-workspace .ink-tank-code {margin-bottom:6px;}
+.printer-ink-workspace .ink-color-name {min-height:0;margin:8px 0 4px;}
+.printer-ink-workspace .ink-tank-button small {min-height:25px;}
+.printer-ink-workspace .ink-refill-button {width:auto;min-width:62px;min-height:30px;margin-top:4px;}
+.printer-ink-workspace .ink-card-help {margin-top:12px;text-align:center;}
+@media(max-width:600px){.printer-ink-workspace .printer-ink-card{padding:16px;}.printer-ink-workspace .ink-tanks{gap:16px 10px;}.printer-ink-workspace .ink-tank-glass{height:82px;width:40px;}.printer-ink-toggle{display:flex;}.printer-ink-toggle button{flex:1;justify-content:center;}.printer-ink-workspace .ink-refill-button{min-height:36px;}}
