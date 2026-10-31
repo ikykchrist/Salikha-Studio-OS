@@ -18,6 +18,9 @@ for(const kind of ['cashflow','revenue']){
  const s=pdf.toString();assert(s.startsWith('%PDF-1.4'));assert(s.includes('0.72 0.12 0.20'));assert(!s.includes('NaN'));
  if(kind==='cashflow'){assert(s.includes('(500.00)'));assert(s.includes('(9,800.00)'));assert((s.match(/\(Reference No\.\)/g)||[]).length>1);}
 }
+// Match node-postgres timestamps before JSON serialization.
+const serverReport={...r,ledger:r.ledger.map(t=>({...t,created_at:new Date(t.created_at)}))};
+assert(financialReportPdf(serverReport,'cashflow').includes(Buffer.from('ENDING BALANCE')));
 const empty=buildFinancialReport({...source,transactions:[],bookings:[],expenses:[]},'2026-10-01','2026-10-31');
 for(const kind of ['cashflow','revenue'])fs.writeFileSync(`tmp/pdfs/${kind}-empty.pdf`,financialReportPdf(empty,kind));
 console.log('PDF fixture checks passed: running balances, voids, repeated headers, red theme, long descriptions, revenue and empty states.');

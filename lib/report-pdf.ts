@@ -53,7 +53,8 @@ export function financialReportPdf(r:FinancialReport,kind:'cashflow'|'revenue'){
   const notes=(value:string)=>{for(const line of wrap(value,width,8)){if(y<bottom+12)fresh();text(line,left,y,8);y-=11;}y-=5;};
   fresh();
   if(kind==='cashflow'){
-    const ordered=r.ledger.slice().sort((a,b)=>a.transaction_date.localeCompare(b.transaction_date)||a.created_at.localeCompare(b.created_at));
+    // PostgreSQL returns Date objects server-side; JSON clients receive strings.
+    const ordered=r.ledger.map(t=>({...t,created_at:typeof t.created_at==='string'?t.created_at:new Date(t.created_at).toISOString()})).sort((a,b)=>a.transaction_date.localeCompare(b.transaction_date)||a.created_at.localeCompare(b.created_at));
     const balances=combinedRunningBalances([{id:'opening',name:'Opening',opening_balance:r.opening,is_active:true}],ordered);
     const rows:string[][]=[['','STARTING BALANCE','','','',money(r.opening)]];
     for(const t of ordered)rows.push([t.transaction_date,`${t.description} / ${t.account_name}${t.status==='POSTED'?'':` - ${t.status} (no cash effect)`}`,t.external_reference||t.reference||t.id,t.status==='POSTED'&&t.direction==='OUTFLOW'?money(Number(t.amount)):'',t.status==='POSTED'&&t.direction==='INFLOW'?money(Number(t.amount)):'',money(balances.get(t.id)??r.opening)]);
