@@ -1,0 +1,20 @@
+import {requireUser} from '../../../lib/auth';
+import {getLocalPostgresPool} from '../../../lib/local-postgres';
+import {ensureInkTracker} from '../../../lib/printer-ink-store';
+import {validateInkUpdate,refillValue} from '../../../lib/printer-ink';
+import {uuid} from '../../../lib/workflow-validation';
+export const runtime='nodejs';
+export async function GET(request:Request){const auth=await requireUser(request);if(auth.response)return auth.response;try{await ensureInkTracker();const pool=getLocalPostgresPool();const tanks=await pool.query('select * from public.printer_ink_tanks order by printer_no,color');const history=await pool.query('select h.*,u.full_name as actor_name from public.printer_ink_history h left join public.system_users u on u.id=h.created_by order by h.created_at desc limit 60');return Response.json({tanks:tanks.rows,history:history.rows},{headers:{'cache-control':'no-store'}});}catch{return Response.json({error:'Ink tracker could not load. Please retry.'},{status:503});}}
+export async function POST(request:Request){
+ const auth=await requireUser(request);if(auth.response)return auth.response;const body=await request.json().catch(()=>null);if(!body||!uuid(body.requestId))return Response.json({error:'A valid request ID is required.'},{status:400});
+ let value;try{value=validateInkUpdate(body);}catch(e){return Response.json({error:e instanceof Error?e.message:'Invalid ink update.'},{status:400});}
+ await ensureInkTracker();const db=await getLocalPostgresPool().connect();
+ try{await db.query('begin');await db.query('select pg_advisory_xact_lock(hashtext($1))',[body.requestId]);const prior=await db.query('select * from public.printer_ink_history where id=$1',[body.requestId]);if(prior.rowCount){const p=prior.rows[0];if(p.created_by!==auth.user!.id||p.printer_no!==value.printerNo||p.color!==value.color||p.action!==value.action||Number(p.after_percent)!==value.level||Number(p.bottle_ml)!==value.bottleMl||Number(p.bottle_price)!==value.bottlePrice||p.notes!==value.notes||(p.added_ml===null?null:Number(p.added_ml))!==value.addedMl)throw Error('This request was already used. Reopen the form.');await db.query('commit');return Response.json({ok:true,alreadySaved:true});}
+ const found=await db.query('select * from public.printer_ink_tanks where printer_no=$1 and color=$2 for update',[value.printerNo,value.color]);const tank=found.rows[0];if(!tank)throw Error('Tank not found.');
+ if(value.action==='REFILL'&&tank.level_percent!==null&&value.level<Number(tank.level_percent))throw Error('A refill cannot lower the checked level. Use Check / adjust level to correct the estimate.');
+ const referenceValue=value.addedMl===null?null:refillValue(value.addedMl,value.bottleMl,value.bottlePrice);
+ await db.query('insert into public.printer_ink_history(id,printer_no,color,action,before_percent,after_percent,added_ml,reference_value,bottle_ml,bottle_price,notes,created_by) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)',[body.requestId,value.printerNo,value.color,value.action,tank.level_percent,value.level,value.addedMl,referenceValue,value.bottleMl,value.bottlePrice,value.notes,auth.user!.id]);
+ await db.query('update public.printer_ink_tanks set level_percent=$3,bottle_ml=$4,bottle_price=$5,checked_at=now(),updated_at=now() where printer_no=$1 and color=$2',[value.printerNo,value.color,value.level,value.bottleMl,value.bottlePrice]);
+ await db.query("insert into public.audit_logs(actor_id,action,entity_type,metadata) values($1,'INK_TANK_UPDATE','printer_ink_tanks',$2::jsonb)",[auth.user!.id,JSON.stringify({...value,requestId:body.requestId,referenceValue})]);await db.query('commit');return Response.json({ok:true,referenceValue});
+ }catch(e){await db.query('rollback').catch(()=>{});return Response.json({error:e instanceof Error?e.message:'Ink update failed.'},{status:400});}finally{db.release();}
+}
