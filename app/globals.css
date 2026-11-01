@@ -676,6 +676,8 @@ button:not(:disabled):active { transform: scale(.985); }
 .invoice-email-setup svg { color:#a96b0a; flex:0 0 16px; height:16px; margin-top:1px; width:16px; }
 .invoice-email-setup strong { color:#704c16; }
 .invoice-email-setup code { background:rgb(255 255 255 / 70%); border-radius:4px; padding:2px 4px; }
+.invoice-email-setup span { flex:1; }
+.invoice-email-setup .secondary-button { font-size:11px; white-space:nowrap; }
 .invoice-workspace { align-items:stretch; display:grid; gap:14px; grid-template-columns:minmax(360px,.92fr) minmax(440px,1.08fr); min-height:570px; }
 .invoice-register,.invoice-preview { min-width:0; padding:18px; }
 .invoice-register { align-self:stretch; }

@@ -1,5 +1,6 @@
 import { requireUser } from "../../../lib/auth";
 import { getLocalPostgresPool } from "../../../lib/local-postgres";
+import { invoiceEmailConfigured, invoiceEmailConnection } from "../../../lib/invoice-email";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,7 +17,8 @@ export async function GET(request: Request) {
       pool.query(`select b.id,b.client_id,b.event_name,b.event_date,b.start_time,b.end_time,b.venue,b.total_amount,b.downpayment_amount,b.paid_amount,b.status,c.display_name as client_name,c.email as client_email,p.name as package_name from public.bookings b join public.clients c on c.id=b.client_id left join public.service_packages p on p.id=b.package_id where b.status in ('PENDING','CONFIRMED') and not exists (select 1 from public.invoices i where i.booking_id=b.id and i.status <> 'VOID') order by b.event_date,b.start_time nulls last limit 500`),
       pool.query("select logo_data_url from public.invoice_settings where id=true"),
     ]);
-    return Response.json({ invoices: invoiceResult.rows, bookings: bookingResult.rows, logoDataUrl: settingsResult.rows[0]?.logo_data_url ?? null, emailReady: Boolean(process.env.RESEND_API_KEY && process.env.INVOICE_FROM_EMAIL) });
+    const emailConnection = invoiceEmailConfigured() ? await invoiceEmailConnection() : undefined;
+    return Response.json({ invoices: invoiceResult.rows, bookings: bookingResult.rows, logoDataUrl: settingsResult.rows[0]?.logo_data_url ?? null, emailReady: Boolean(emailConnection), emailSender: emailConnection?.account_email || null });
   } catch (error) { return Response.json({ error: error instanceof Error ? error.message : "Invoices could not be loaded." }, { status: 503 }); }
 }
 

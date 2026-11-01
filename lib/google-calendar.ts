@@ -23,7 +23,7 @@ export function encryptGoogleToken(value: string) {
   const encrypted = Buffer.concat([cipher.update(value, "utf8"), cipher.final()]);
   return [iv.toString("base64url"), cipher.getAuthTag().toString("base64url"), encrypted.toString("base64url")].join(".");
 }
-function decryptGoogleToken(value: string) {
+export function decryptGoogleToken(value: string) {
   const [iv, tag, ciphertext] = value.split(".");
   if (!iv || !tag || !ciphertext) throw new Error("Stored Google refresh token is invalid.");
   const decipher = createDecipheriv("aes-256-gcm", tokenKey(), Buffer.from(iv, "base64url"));

@@ -20,6 +20,7 @@ export function InvoicesView() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
   const [emailReady, setEmailReady] = useState(false);
+  const [emailSender, setEmailSender] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -43,10 +44,19 @@ export function InvoicesView() {
       setBookings(result.bookings as Booking[]);
       setLogoDataUrl(result.logoDataUrl ?? null);
       setEmailReady(Boolean(result.emailReady));
+      setEmailSender(result.emailSender ?? null);
     } catch (error) { setLoadError(error instanceof Error ? error.message : "Invoices could not be loaded."); }
     finally { setLoading(false); }
   };
   useEffect(() => { void reload(); }, []);
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const status = url.searchParams.get("invoiceEmail");
+    if (!status) return;
+    url.searchParams.delete("invoiceEmail");
+    window.history.replaceState({}, "", url.pathname + url.search + url.hash);
+    void showNotice(status === "connected" ? "The studio Gmail account is connected. Invoice sending is ready." : status === "consent-denied" ? "Gmail permission was not granted. You can connect it later." : status === "state-error" ? "The Gmail connection expired. Please try connecting again." : status, status === "connected" ? "Invoice email connected" : "Gmail connection needs attention");
+  }, []);
 
   const visible = useMemo(() => invoices.filter((invoice) => `${invoice.invoice_number} ${invoice.client_name} ${invoice.event_name || ""}`.toLowerCase().includes(search.toLowerCase())), [invoices, search]);
   const selected = visible.find((invoice) => invoice.id === selectedId) || invoices.find((invoice) => invoice.id === selectedId) || null;
@@ -75,10 +85,10 @@ export function InvoicesView() {
 
   const send = async (invoice: Invoice) => {
     if (!invoice.client_email) { await showNotice("Add an email address to the client record before sending this invoice.", "Client email needed"); return; }
-    if (!emailReady) { await showNotice("Set RESEND_API_KEY and INVOICE_FROM_EMAIL on the server, then restart the app.", "Email setup required"); return; }
-    if (!await showConfirm(`Send invoice ${invoice.invoice_number} to ${invoice.client_email}?`, { title: "Send invoice", confirmLabel: "Send invoice" })) return;
+    if (!emailReady) { await showNotice("Connect salikhaprintco@gmail.com in the Invoice tab first.", "Email setup required"); return; }
+    if (!await showConfirm(`${invoice.sent_at ? "Resend" : "Send"} invoice ${invoice.invoice_number} from ${emailSender} to ${invoice.client_email}?`, { title: invoice.sent_at ? "Resend invoice" : "Send invoice", confirmLabel: invoice.sent_at ? "Resend invoice" : "Send invoice" })) return;
     setWorkingId(invoice.id);
-    try { const response = await fetch("/api/invoices/send", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: invoice.id }) }); const result = await response.json(); if (!response.ok) throw new Error(result.error || "Invoice email could not be sent."); await showNotice(`${invoice.invoice_number} was sent to ${result.sentTo}.`, "Invoice sent"); await reload(); }
+    try { const response = await fetch("/api/invoices/send", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: invoice.id, resend: Boolean(invoice.sent_at) }) }); const result = await response.json(); if (!response.ok) throw new Error(result.error || "Invoice email could not be sent."); await showNotice(`${invoice.invoice_number} was sent to ${result.sentTo}.`, "Invoice sent"); await reload(); }
     catch (error) { await showNotice(error instanceof Error ? error.message : "Invoice email could not be sent.", "Could not send invoice"); }
     finally { setWorkingId(""); }
   };
@@ -110,7 +120,7 @@ export function InvoicesView() {
     <section className="invoice-branding panel"><div className="invoice-branding-copy"><span className="eyebrow">Invoice branding</span><strong>{logoDataUrl ? "Your saved logo is active" : "Use your studio logo on every invoice"}</strong><small>PNG · Maximum 1 MB · stored in the studio database</small></div>{logoDataUrl && <img className="invoice-branding-preview" src={logoDataUrl} alt="Saved invoice logo preview" />}{logoDataUrl && <button className="secondary-button" type="button" disabled={logoBusy} onClick={() => void saveLogo(null)}><Trash2 aria-hidden="true" /> Remove</button>}<input ref={fileRef} type="file" accept="image/png,.png" hidden onChange={(event) => void uploadLogo(event.target.files?.[0])} /><button className="secondary-button" type="button" disabled={logoBusy} onClick={() => fileRef.current?.click()}><ImagePlus aria-hidden="true" />{logoBusy ? "Saving…" : logoDataUrl ? "Change logo" : "Upload PNG logo"}</button></section>
     <section className="invoice-maintenance panel"><div><p className="eyebrow">Invoice maintenance</p><strong>Keep invoices aligned with booking records</strong><small>Refreshing changes event details only. Financial values stay as issued.</small></div><div className="invoice-maintenance-actions"><button className="secondary-button" type="button" onClick={() => void refreshBookingDetails()} disabled={maintenanceBusy}><RefreshCw aria-hidden="true" /> Refresh invoice details</button><button className="secondary-button danger-button" type="button" onClick={() => { setAdminPassword(""); setMaintenanceError(""); setDeleteVoidsOpen(true); }} disabled={maintenanceBusy || voidCount === 0}><Trash2 aria-hidden="true" /> Delete void invoices ({voidCount})</button></div></section>
     <section className="invoice-metrics"><article className="metric-card"><span>Total invoices</span><strong>{invoices.length}</strong><small>Saved in this workspace</small></article><article className="metric-card"><span>Drafts</span><strong>{invoices.filter((invoice) => invoice.status === "DRAFT").length}</strong><small>Ready for review</small></article><article className="metric-card"><span>Sent and outstanding</span><strong>{peso(outstanding)}</strong><small>Linked booking payments reflected</small></article><article className="metric-card"><span>Overdue</span><strong>{invoices.filter((invoice) => statusOf(invoice) === "OVERDUE").length}</strong><small>Past the due date</small></article></section>
-    {!emailReady && <div className="invoice-email-setup"><Mail aria-hidden="true" /><span><strong>Email sending needs setup.</strong> Configure <code>RESEND_API_KEY</code> and <code>INVOICE_FROM_EMAIL</code> on the app server. Creation, logo saving, and printing work independently.</span></div>}
+    <div className="invoice-email-setup"><Mail aria-hidden="true" /><span><strong>{emailReady ? `Sending from ${emailSender}` : "Connect the studio email to send invoices."}</strong> {emailReady ? "Invoices go directly through the connected Gmail account." : "Use salikhaprintco@gmail.com and approve Gmail send-only access."}</span>{!emailReady && <a className="secondary-button" href="/api/invoices/email/connect">Connect Gmail</a>}</div>
     {loadError && <p className="form-warning" role="alert">{loadError}</p>}
     <section className="invoice-workspace"><div className="invoice-register panel"><div className="panel-heading"><div><p className="eyebrow">Invoice register</p><h2>All invoices</h2></div><span className="muted-label">{visible.length} records</span></div><label className="invoice-search"><span className="sr-only">Search invoices</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search invoice, client, or event" /></label>
       {loading ? <div className="invoice-empty">Loading invoices…</div> : visible.length === 0 ? <div className="invoice-empty"><span className="empty-mark"><Receipt aria-hidden="true" /></span><h3>{invoices.length ? "No invoices match" : bookings.length ? "No invoices yet" : "No uninvoiced active bookings"}</h3><p>{invoices.length ? "Try another invoice number, client, or event." : bookings.length ? "Select a pending or confirmed booking to create its invoice. Booking details and price are filled automatically." : "All pending/confirmed bookings already have an invoice, or there are no active bookings yet."}</p>{bookings.length > 0 && <button className="secondary-button" type="button" onClick={() => setFormOpen(true)}><Plus aria-hidden="true" /> Create from booking</button>}</div> : <div className="invoice-list">{visible.map((invoice) => <button key={invoice.id} type="button" className={`invoice-row ${selectedId === invoice.id ? "selected" : ""}`} onClick={() => setSelectedId(invoice.id)}><span><strong>{invoice.invoice_number}</strong><small>{invoice.client_name}</small></span><span><strong>{peso(Number(invoice.total_amount))}</strong><small>{invoice.event_name || "Linked booking"}</small></span><span className={`invoice-status ${statusOf(invoice).toLowerCase()}`}>{statusOf(invoice)}</span><span className="invoice-row-date">{dateLabel(invoice.issue_date)}</span></button>)}</div>}</div>

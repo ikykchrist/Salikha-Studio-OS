@@ -2,6 +2,7 @@
 -- This SQL is applied directly by the standalone local PostgreSQL container.
 
 drop table if exists public.google_calendar_connections cascade;
+drop table if exists public.invoice_email_connections cascade;
 drop table if exists public.system_sessions cascade;
 drop table if exists public.system_users cascade;
 drop table if exists public.booking_consumable_usage cascade;
@@ -155,6 +156,16 @@ create unique index invoices_one_active_per_booking_idx on public.invoices (book
 create table public.invoice_settings (
   id boolean primary key default true check (id),
   logo_data_url text,
+  updated_at timestamptz not null default now()
+);
+
+create table public.invoice_email_connections (
+  id boolean primary key default true check (id),
+  account_email text not null,
+  encrypted_refresh_token text not null,
+  access_token text,
+  access_token_expires_at timestamptz,
+  connected_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
@@ -371,6 +382,7 @@ alter table public.service_packages enable row level security;
 alter table public.bookings enable row level security;
 alter table public.invoices enable row level security;
 alter table public.invoice_settings enable row level security;
+alter table public.invoice_email_connections enable row level security;
 alter table public.payments enable row level security;
 alter table public.cash_accounts enable row level security;
 alter table public.cash_transactions enable row level security;
