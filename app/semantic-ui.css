@@ -110,6 +110,28 @@
 @media (max-width: 760px) { .cashflow-quick-actions { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); } :root[data-theme] .cashflow-quick-actions > button { min-width: 0; white-space: normal; } }
 @media (max-width: 420px) { .cashflow-quick-actions { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: reduce) { :root[data-theme] .cashflow-quick-actions > button { transition: none; } :root[data-theme] .cashflow-quick-actions > button:hover:not(:disabled) { transform: none; } }
+
+/* Motion runs on the content already on screen; it never delays a tab or a data request. */
+.page-content { animation: saas-tab-reveal .18s ease-out both; }
+.page-content .page-heading { animation: saas-heading-rise .23s cubic-bezier(.2,.8,.2,1) both; }
+.sidebar .nav-item { transition: background-color .18s ease, color .18s ease, box-shadow .18s ease, transform .18s ease; }
+.sidebar .nav-item:hover:not(.active) { transform: translateX(3px); }
+.sidebar .nav-item.active { transform: translateX(0); }
+.page-content :is(.metric-card,.booking-summary-card,.inventory-metric,.equipment-metric,.package-metric,.account-card,.settings-card,.report-kpi) { transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease; }
+.page-content :is(.metric-card,.booking-summary-card,.inventory-metric,.equipment-metric,.package-metric,.account-card,.settings-card,.report-kpi):hover { box-shadow: 0 9px 24px rgba(25,24,32,.09); transform: translateY(-2px); }
+:root[data-theme="dark"] .page-content :is(.metric-card,.booking-summary-card,.inventory-metric,.equipment-metric,.package-metric,.account-card,.settings-card,.report-kpi):hover { box-shadow: 0 10px 26px rgba(0,0,0,.22); }
+.page-content :is(.booking-row,.client-row,.inventory-row,.equipment-row,.package-row,.invoice-row,.transaction-row) { transition: background-color .16s ease, border-color .16s ease, box-shadow .16s ease; }
+:is(.booking-section-nav,.inventory-section-nav,.client-section-nav,.printer-ink-toggle) button { transition: background-color .18s ease, color .18s ease, box-shadow .18s ease, transform .18s ease; }
+:is(.booking-section-nav,.inventory-section-nav,.client-section-nav,.printer-ink-toggle) button:hover:not(:disabled) { transform: translateY(-1px); }
+.notification-popover { animation: saas-menu-pop .18s cubic-bezier(.2,.8,.2,1) both; transform-origin: top right; }
+@keyframes saas-tab-reveal { from { opacity: .94; } to { opacity: 1; } }
+@keyframes saas-heading-rise { from { opacity: .85; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes saas-menu-pop { from { opacity: 0; transform: translateY(-5px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .page-content,.page-content .page-heading,.notification-popover { animation: none; }
+  .sidebar .nav-item,.page-content :is(.metric-card,.booking-summary-card,.inventory-metric,.equipment-metric,.package-metric,.account-card,.settings-card,.report-kpi),.page-content :is(.booking-row,.client-row,.inventory-row,.equipment-row,.package-row,.invoice-row,.transaction-row),:is(.booking-section-nav,.inventory-section-nav,.client-section-nav,.printer-ink-toggle) button { transition: none; }
+  .sidebar .nav-item:hover:not(.active),.page-content :is(.metric-card,.booking-summary-card,.inventory-metric,.equipment-metric,.package-metric,.account-card,.settings-card,.report-kpi):hover,:is(.booking-section-nav,.inventory-section-nav,.client-section-nav,.printer-ink-toggle) button:hover:not(:disabled) { transform: none; }
+}
 .booking-row > * { min-width: 0; overflow-wrap: anywhere; }
 .booking-row .workflow-row-actions button { white-space: normal; }
 @media(min-width:901px) { .booking-row,.booking-table-head { grid-template-columns:1.2fr 1fr 1.1fr .85fr 1.05fr .85fr 1fr; gap:12px; } }
