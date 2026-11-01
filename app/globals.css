@@ -797,6 +797,34 @@ button:not(:disabled):active { transform: scale(.985); }
 .invoice-editor-heading .eyebrow { margin:0 0 3px; }
 .invoice-editor-heading h3 { font-size:13px; margin:0; }
 .invoice-editor-heading .secondary-button { font-size:10px; min-height:33px; padding:0 10px; }
+
+/* Shared workspace loading shell and tactile action buttons. */
+.page-content { position: relative; }
+.workspace-loading { background: var(--canvas); border-radius: 12px; inset: 0; min-height: 430px; padding: 43px 5.5% 25px; position: absolute; z-index: 4; }
+.workspace-loading-heading { display: grid; gap: 12px; margin-bottom: 28px; }
+.workspace-loading-kicker { height: 10px; width: 125px; }
+.workspace-loading-title { height: 37px; width: min(280px, 70%); }
+.workspace-loading-description { height: 13px; width: min(400px, 90%); }
+.workspace-loading-cards { display: grid; gap: 13px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.workspace-loading-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; display: grid; gap: 16px; min-height: 135px; padding: 20px; }
+.workspace-loading-card i:first-child { height: 11px; width: 65%; }
+.workspace-loading-card b { height: 27px; width: 48%; }
+.workspace-loading-card i:last-child { height: 10px; width: 76%; }
+.workspace-loading-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; display: grid; gap: 17px; margin-top: 14px; min-height: 220px; padding: 24px; }
+.workspace-loading-panel .skeleton { height: 14px; width: 42%; }
+.workspace-loading-panel .skeleton:nth-child(2) { width: 85%; }
+.workspace-loading-panel .skeleton:nth-child(3) { width: 68%; }
+.brand-mark { background: transparent; border-radius: 11px; display: block; height: 39px; object-fit: contain; width: 39px; }
+.primary-button, .secondary-button, .filter-button, .today-button, .refresh-button { position: relative; text-decoration: none; transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease, filter .18s ease; }
+.primary-button { background: radial-gradient(ellipse at 50% 0%, rgba(255,255,255,.28), transparent 65%), linear-gradient(180deg, #ed4051, #c62237); border-color: #ba2637; box-shadow: inset 0 1px 0 rgba(255,255,255,.38), inset 0 -1px 0 rgba(100,5,22,.28), 0 2px 3px rgba(78,10,25,.18), 0 9px 20px rgba(217,54,69,.21); text-shadow: 0 1px 1px rgba(81,10,24,.18); }
+.secondary-button, .filter-button, .today-button, .refresh-button { background: radial-gradient(ellipse at 50% 0%, rgba(255,255,255,.96), transparent 80%), linear-gradient(180deg, #fff, #f5f4f6); box-shadow: inset 0 1px 0 rgba(255,255,255,1), inset 0 -1px 0 rgba(38,30,45,.06), 0 2px 3px rgba(25,20,32,.06), 0 7px 16px rgba(25,20,32,.07); }
+.primary-button:hover:not(:disabled), .secondary-button:hover:not(:disabled), .filter-button:hover:not(:disabled), .today-button:hover:not(:disabled), .refresh-button:hover:not(:disabled) { filter: brightness(1.05); transform: translateY(-2px); }
+.primary-button:active:not(:disabled), .secondary-button:active:not(:disabled), .filter-button:active:not(:disabled), .today-button:active:not(:disabled), .refresh-button:active:not(:disabled) { box-shadow: inset 0 2px 5px rgba(30,20,25,.16), 0 1px 2px rgba(30,20,25,.08); transform: translateY(1px); }
+.primary-button:focus-visible, .secondary-button:focus-visible, .filter-button:focus-visible, .today-button:focus-visible, .refresh-button:focus-visible { outline: 3px solid rgba(217,54,69,.38); outline-offset: 3px; }
+.primary-button:disabled, .secondary-button:disabled, .filter-button:disabled, .today-button:disabled, .refresh-button:disabled { box-shadow: none; filter: none; transform: none; }
+:root[data-theme="dark"] .secondary-button, :root[data-theme="dark"] .filter-button, :root[data-theme="dark"] .today-button, :root[data-theme="dark"] .refresh-button { background: radial-gradient(ellipse at 50% 0%, rgba(255,255,255,.09), transparent 85%), linear-gradient(180deg, #343039, #28252d); box-shadow: inset 0 1px 0 rgba(255,255,255,.13), inset 0 -1px 0 rgba(0,0,0,.24), 0 2px 3px rgba(0,0,0,.16), 0 8px 18px rgba(0,0,0,.19); }
+@media(max-width: 720px) { .workspace-loading { padding: 30px 18px 20px; }.workspace-loading-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media(prefers-reduced-motion: reduce) { .primary-button, .secondary-button, .filter-button, .today-button, .refresh-button { transition: none; }.primary-button:hover:not(:disabled), .secondary-button:hover:not(:disabled), .filter-button:hover:not(:disabled), .today-button:hover:not(:disabled), .refresh-button:hover:not(:disabled) { transform: none; } }
 .invoice-editor-heading svg { height:13px; width:13px; }
 .invoice-line-editor { align-items:end; border-bottom:1px solid var(--line); display:grid; gap:9px; grid-template-columns:minmax(0,1fr) 75px 120px 32px; padding:9px 0; }
 .invoice-line-editor label { font-size:9px; }

@@ -28,6 +28,7 @@ import {PrinterInkTracker} from "./printer-ink-tracker";
 import { InventoryMovementForm } from "./inventory-movement-form";
 import { StatusBadge } from "./status-badge";
 import { InvoicesView } from "./invoices-view";
+import { WorkspaceLoading } from "./workspace-loading";
 
 const navigation = [
   ["Overview", LayoutDashboard], ["Bookings", ClipboardList], ["Clients", Users],
@@ -171,7 +172,7 @@ export default function Home() {
       <DialogHost />
       <aside className={`sidebar ${sidebarOpen ? "mobile-open" : ""}`}>
         <div className="brand">
-          <div className="brand-mark">S</div>
+          <img className="brand-mark" src="/icon.svg" alt="" />
           <div>
             <strong>Salikha</strong>
             <span>Studio OS</span>
@@ -212,6 +213,7 @@ export default function Home() {
         </header>
 
         <div className="page-content" key={activeView}>
+          <WorkspaceLoading view={activeView} />
            {activeView === "Team" && authUser.role === "ADMIN" ? <TeamView currentUser={authUser} /> : activeView === "Invoices" && authUser.role === "ADMIN" ? <InvoicesView /> : activeView === "Bookings" ? <BookingsView isAdmin={authUser.role === "ADMIN"} showForm={showBookingForm} onShowForm={setShowBookingForm} onNavigate={setActiveView} /> : activeView === "Clients" ? <ClientsView /> : activeView === "Calendar" ? <CalendarView /> : activeView === "Cashflow" ? <MoneyWorkspace key="cash" /> : activeView === "Inventory" ? <InventoryView onNavigate={setActiveView} /> : activeView === "Equipment" ? <EquipmentView /> : activeView === "Packages" ? <PackagesView onNavigate={setActiveView} onCreateBooking={() => { setActiveView("Bookings"); setShowBookingForm(true); }} /> : activeView === "Reports" ? <FinancialReports /> : activeView === "Settings" ? <SettingsView user={authUser} /> : <>
           <section className="page-heading">
             <div>
