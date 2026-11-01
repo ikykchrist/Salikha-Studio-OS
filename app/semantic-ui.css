@@ -227,3 +227,6 @@
 .client-section-nav ~ .workflow-crm > .client-message-templates {grid-column:1/-1;}
 @media(max-width:900px){.client-section-nav + .client-summary-grid {grid-template-columns:repeat(2,minmax(0,1fr));}.client-section-nav + .client-summary-grid .booking-summary-card:last-child{grid-column:1/-1;}}
 @media(max-width:620px){.client-section-nav button{font-size:12px;}}
+
+.booking-section-nav button span {display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 5px;border-radius:10px;background:var(--soft-accent);color:var(--accent);font-size:11px;font-weight:700;}
+@media(max-width:620px){.booking-section-nav button{font-size:12px;gap:6px;white-space:normal;line-height:1.25;}}

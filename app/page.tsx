@@ -310,11 +310,11 @@ function BookingsView({ isAdmin, showForm, onShowForm, onNavigate }: { isAdmin: 
   };
   return <>
     {bookingLoadError && <p className="form-warning" role="alert">{bookingLoadError}</p>}
-    <div className="workflow-actions"><button aria-pressed={statusFilter === "Pending"} className={statusFilter === "Pending" ? "primary-button" : "secondary-button"} onClick={() => setStatusFilter("Pending")}>Active / pending ({bookings.filter(b => b.status === "PENDING").length})</button><button aria-pressed={statusFilter === "Archive"} className={statusFilter === "Archive" ? "primary-button" : "secondary-button"} onClick={() => setStatusFilter("Archive")}><Archive size={16} /> Archive ({bookings.filter(b => b.status !== "PENDING").length})</button></div>
     <section className="page-heading booking-heading">
       <div><p className="eyebrow">Workspace / Bookings</p><h1>Bookings</h1><p className="subheading">Keep every event, payment status, and operational detail in one place.</p></div>
       <div className="heading-actions"><button className="secondary-button" type="button" onClick={() => onNavigate("Calendar")}><CalendarDays aria-hidden="true" /> Calendar</button><button className="primary-button" type="button" onClick={() => onShowForm(true)}><Plus aria-hidden="true" /> New booking</button></div>
     </section>
+    <nav className="inventory-section-nav booking-section-nav" aria-label="Booking sections"><button type="button" aria-current={statusFilter === "Pending" ? "page" : undefined} onClick={() => setStatusFilter("Pending")}><ClipboardList aria-hidden="true" />Active / pending <span>{bookings.filter(b => b.status === "PENDING").length}</span></button><button type="button" aria-current={statusFilter === "Archive" ? "page" : undefined} onClick={() => setStatusFilter("Archive")}><Archive aria-hidden="true" />Archive <span>{bookings.filter(b => b.status !== "PENDING").length}</span></button></nav>
     <section className="booking-summary-grid">
       <div className="booking-summary-card"><span>All bookings</span><strong>{bookings.length}</strong><small>Saved in this workspace</small></div>
       <div className="booking-summary-card"><span>Pending bookings</span><strong>{bookings.filter((booking) => booking.status === "PENDING").length}</strong><small>Needs a decision</small></div>
