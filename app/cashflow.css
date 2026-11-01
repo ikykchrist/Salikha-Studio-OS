@@ -37,3 +37,37 @@
 .cashflow-detail dd { margin:3px 0 0; overflow-wrap:anywhere; }
 @media(max-width:1000px) { .cashflow-summary { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media(max-width:600px) { .cashflow-summary .panel { padding:14px; } .cashflow-summary .workflow-amount { font-size:23px; } .cashflow-chart { padding:16px; } .cashflow-toolbar .workflow-filters { width:100%; } .cashflow-toolbar .workflow-filters label { flex:1; min-width:0; } .cashflow-toolbar input { max-width:100%; } .cashflow-search { flex-basis:100%; max-width:none; } .cashflow-accounts .panel { flex-basis:200px; } }
+
+/* Keep the three cashflow jobs distinct and the overview scannable. */
+.cashflow-topline {display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 20px;background:var(--surface);border:1px solid var(--line);border-radius:12px;}
+.cashflow-topline strong,.cashflow-topline span {display:block;}
+.cashflow-topline strong {font-size:14px;}
+.cashflow-topline span {font-size:12px;color:var(--muted);margin-top:3px;}
+.cashflow-sections {display:flex;gap:6px;padding:5px;width:fit-content;max-width:100%;background:var(--canvas);border:1px solid var(--line);border-radius:12px;}
+.cashflow-sections button {min-height:40px;padding:8px 16px;border:1px solid transparent;border-radius:8px;background:transparent;color:var(--muted);font:inherit;font-size:13px;font-weight:650;cursor:pointer;white-space:nowrap;}
+.cashflow-sections button[aria-current=page] {background:var(--surface);border-color:var(--line);color:var(--accent);box-shadow:0 2px 8px #0000000b;}
+.cashflow-sections button:hover:not([aria-current=page]) {color:var(--ink);background:var(--surface);}
+.cashflow-sections button:focus-visible {outline:2px solid var(--accent);outline-offset:2px;}
+.cashflow-sections button span {display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 5px;margin-left:3px;border-radius:10px;background:var(--soft-accent);color:var(--accent);font-size:11px;}
+.cashflow-period {display:flex;align-items:end;gap:16px;flex-wrap:wrap;}
+.cashflow-period>strong {font-size:13px;align-self:center;}
+.cashflow-period .workflow-filters {gap:8px;}
+.cashflow-period .workflow-filters label {flex:0 1 154px;font-size:12px;}
+.cashflow-period small {color:var(--muted);font-size:12px;line-height:1.5;flex:1 1 260px;}
+.cashflow-summary .panel,.cashflow-accounts .panel,.cashflow-chart,.cashflow-action-menu {min-height:0;}
+.cashflow-summary .panel {padding:16px 18px;}
+.cashflow-summary .workflow-amount {margin:9px 0 4px;}
+.cashflow-summary small {display:block;line-height:1.45;}
+.cashflow-chart {padding:18px 22px;}
+.cashflow-chart .workflow-empty {padding:22px 12px;}
+.cashflow-accounts .panel {flex-basis:210px;}
+.cashflow-section-title {font-size:18px;margin:0 0 -10px;}
+.cashflow-ledger-context {display:flex;align-items:center;gap:16px;justify-content:space-between;padding:13px 18px;border:1px solid var(--line);background:var(--surface);border-radius:10px;}
+.cashflow-ledger-context span {display:block;color:var(--muted);font-size:11px;}
+.cashflow-ledger-context strong {font-size:20px;font-variant-numeric:tabular-nums;}
+.cashflow-ledger-context p {margin:0;color:var(--muted);font-size:12px;line-height:1.5;max-width:520px;}
+.cashflow-workspace .workflow-help {margin:0;}
+@media(max-width:620px){.cashflow-topline{align-items:stretch;flex-direction:column;}.cashflow-topline .primary-button{width:100%;justify-content:center;}.cashflow-sections{width:100%;}.cashflow-sections button{flex:1;min-width:0;padding:8px;font-size:12px;white-space:normal;line-height:1.25;}.cashflow-period{display:block;}.cashflow-period .workflow-filters{margin:8px 0;}.cashflow-period .workflow-filters label{flex:1 1 120px;}.cashflow-ledger-context{align-items:flex-start;flex-direction:column;gap:4px;}}
+
+.cashflow-view-detail {display:block;margin-top:8px;padding:2px 0;border:0;background:transparent;color:var(--accent);font:inherit;font-size:12px;font-weight:650;text-decoration:underline;text-underline-offset:3px;cursor:pointer;}
+.cashflow-view-detail:focus-visible {outline:2px solid var(--accent);outline-offset:2px;}
