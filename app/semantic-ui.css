@@ -206,3 +206,5 @@
 .inventory-section-nav + .printer-ink-workspace {margin-top:0;}
 .inventory-section-nav ~ .inventory-metrics {grid-template-columns:repeat(3,minmax(0,1fr));}
 @media(max-width:620px){.inventory-section-nav{width:100%;}.inventory-section-nav button{flex:1;min-width:0;padding:10px 8px;}.inventory-section-nav ~ .inventory-metrics{grid-template-columns:repeat(2,minmax(0,1fr));}.inventory-section-nav ~ .inventory-metrics .inventory-metric:last-child{grid-column:1/-1;min-height:auto;}}
+
+.inventory-layout:not(:has(.inventory-detail)) {grid-template-columns:minmax(0,1fr);}
