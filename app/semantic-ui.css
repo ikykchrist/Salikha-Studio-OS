@@ -121,6 +121,13 @@
 .page-content :is(.metric-card,.booking-summary-card,.inventory-metric,.equipment-metric,.package-metric,.account-card,.settings-card,.report-kpi):hover { box-shadow: 0 9px 24px rgba(25,24,32,.09); transform: translateY(-2px); }
 :root[data-theme="dark"] .page-content :is(.metric-card,.booking-summary-card,.inventory-metric,.equipment-metric,.package-metric,.account-card,.settings-card,.report-kpi):hover { box-shadow: 0 10px 26px rgba(0,0,0,.22); }
 .page-content :is(.booking-row,.client-row,.inventory-row,.equipment-row,.package-row,.invoice-row,.transaction-row) { transition: background-color .16s ease, border-color .16s ease, box-shadow .16s ease; }
+
+/* Package colors stay solid and visible without tinting the whole row. */
+.package-name-cell { grid-template-columns: 13px minmax(0, 1fr); column-gap: 11px; }
+.package-name-cell i { width: 13px; height: 36px; border-radius: 5px; box-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 2px 5px rgba(18,24,32,.13); }
+.package-color-options label { gap: 8px; padding: 8px 10px; font-size: 11px; }
+.package-color-options label span { width: 19px; height: 19px; border: 1px solid rgba(0,0,0,.1); box-shadow: inset 0 1px 0 rgba(255,255,255,.28), 0 1px 3px rgba(0,0,0,.12); }
+.package-color-options label:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 14%, transparent); font-weight: 700; }
 :is(.booking-section-nav,.inventory-section-nav,.client-section-nav,.printer-ink-toggle) button { transition: background-color .18s ease, color .18s ease, box-shadow .18s ease, transform .18s ease; }
 :is(.booking-section-nav,.inventory-section-nav,.client-section-nav,.printer-ink-toggle) button:hover:not(:disabled) { transform: translateY(-1px); }
 .notification-popover { animation: saas-menu-pop .18s cubic-bezier(.2,.8,.2,1) both; transform-origin: top right; }
