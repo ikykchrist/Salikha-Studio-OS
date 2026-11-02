@@ -87,6 +87,26 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .telegram-settings-actions input[type="password"] { min-width: min(340px, 66vw); }
 .telegram-approved-users { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .telegram-approved-users > span { display: inline-flex; align-items: center; gap: 9px; border: 1px solid var(--line); border-radius: 9px; padding: 5px 10px; font-size: 12px; }
+.assistant-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 18px; align-items: start; }
+.assistant-chat { display: flex; flex-direction: column; min-height: min(680px, calc(100vh - 230px)); padding: 0; overflow: hidden; }
+.assistant-chat-top { display: flex; align-items: center; gap: 11px; border-bottom: 1px solid var(--line); padding: 17px 21px; }
+.assistant-avatar { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; background: var(--soft-accent); color: var(--accent-dark); }
+.assistant-avatar svg { width: 20px; height: 20px; }
+.assistant-chat-top strong, .assistant-chat-top small { display: block; }.assistant-chat-top small { color: var(--muted); margin-top: 3px; }
+.assistant-live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--positive); margin-left: auto; }
+.assistant-messages { flex: 1; overflow-y: auto; max-height: 550px; padding: 20px; }
+.assistant-empty { display: grid; justify-items: center; align-content: center; min-height: 270px; text-align: center; padding: 25px; }
+.assistant-empty > svg { width: 35px; height: 35px; padding: 8px; border-radius: 12px; background: var(--soft-accent); color: var(--accent); }
+.assistant-empty h2 { margin: 15px 0 0; font-size: 19px; }.assistant-empty p { max-width: 470px; color: var(--muted); line-height: 1.6; }
+.assistant-prompts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; width: min(100%, 610px); margin-top: 12px; }
+.assistant-prompts button { border: 1px solid var(--line); border-radius: 11px; background: var(--surface); color: var(--ink); text-align: left; padding: 12px; font-weight: 600; font-size: 12px; }
+.assistant-prompts button:hover { border-color: var(--accent); color: var(--accent-dark); }
+.assistant-message { max-width: 85%; margin: 0 0 20px; }.assistant-message span { display: block; color: var(--muted); font-size: 11px; font-weight: 700; margin-bottom: 6px; }.assistant-message p { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.65; margin: 0; padding: 13px 15px; border-radius: 13px; background: var(--canvas); }
+.assistant-message.is-user { margin-left: auto; }.assistant-message.is-user p { background: var(--soft-accent); }.assistant-message.is-user span { text-align: right; }
+.assistant-compose { border-top: 1px solid var(--line); padding: 16px 20px; }.assistant-compose > label { display: block; font-size: 12px; font-weight: 700; margin-bottom: 8px; }.assistant-compose textarea, .assistant-setup input { width: 100%; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); font: inherit; padding: 11px 12px; resize: vertical; }.assistant-compose > div { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 9px; }.assistant-compose small, .assistant-side-card small { color: var(--muted); }.assistant-compose .primary-button { display: inline-flex; align-items: center; gap: 7px; }.assistant-compose .primary-button svg { width: 15px; height: 15px; }
+.assistant-sidebar { display: grid; gap: 14px; }.assistant-side-card { padding: 20px; }.assistant-side-heading { display: flex; align-items: center; gap: 9px; }.assistant-side-heading svg { width: 18px; height: 18px; color: var(--accent); }.assistant-side-heading h2 { font-size: 15px; margin: 0; }.assistant-side-card p { color: var(--muted); line-height: 1.6; font-size: 12px; }.assistant-toggle { display: flex; align-items: center; gap: 9px; margin-top: 16px; font-weight: 650; }.assistant-toggle input { accent-color: var(--accent); width: 17px; height: 17px; }.assistant-setup label { display: grid; gap: 6px; margin-top: 15px; font-size: 12px; font-weight: 700; }.assistant-setup button { width: 100%; margin: 15px 0 10px; }.assistant-setup a { display: block; margin-bottom: 8px; color: var(--accent-dark); }.assistant-error { margin: 10px 20px; padding: 10px 12px; border-radius: 9px; background: var(--soft-accent); color: var(--accent-dark); }
+@media (max-width: 900px) { .assistant-layout { grid-template-columns: 1fr; }.assistant-sidebar { grid-template-columns: repeat(2, minmax(0, 1fr)); }.assistant-chat { min-height: 570px; } }
+@media (max-width: 620px) { .assistant-sidebar { grid-template-columns: 1fr; }.assistant-prompts { grid-template-columns: 1fr; }.assistant-chat { min-height: 500px; }.assistant-message { max-width: 95%; }.assistant-compose > div { align-items: flex-start; flex-direction: column; }.assistant-compose .primary-button { align-self: flex-end; } }
 /* Legacy catalog views share the same readable density as Bookings and Clients. */
 :root[data-theme] :is(.inventory-metric,.equipment-metric,.package-metric,.booking-summary-card,.account-card) { min-height: 124px; padding: 20px; }
 :root[data-theme] :is(.inventory-metric,.equipment-metric,.package-metric) > :is(span,small),

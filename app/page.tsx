@@ -28,6 +28,7 @@ import { ClientFollowups } from "./client-followups";
 import {PrinterInkTracker} from "./printer-ink-tracker";
 import { InventoryMovementForm } from "./inventory-movement-form";
 import { StatusBadge } from "./status-badge";
+import { AiAssistant } from "./ai-assistant";
 import { InvoicesView } from "./invoices-view";
 
 const navigation = [
@@ -70,7 +71,7 @@ export default function Home() {
 
   useEffect(() => {
     const storedView = window.localStorage.getItem("salikha-active-view");
-    const validViews = navigation.map(([label]) => label).concat("Invoices", "Settings", "Team");
+    const validViews = navigation.map(([label]) => label).concat("Invoices", "Settings", "Team", "Assistant");
     if (storedView === "Expenses") setActiveView("Cashflow");
     else if (storedView && validViews.includes(storedView)) setActiveView(storedView);
     setViewRestored(true);
@@ -214,7 +215,7 @@ export default function Home() {
         </header>
 
         <div className="page-content" key={activeView}>
-           {activeView === "Team" && authUser.role === "ADMIN" ? <TeamView currentUser={authUser} /> : activeView === "Invoices" && authUser.role === "ADMIN" ? <InvoicesView /> : activeView === "Bookings" ? <BookingsView isAdmin={authUser.role === "ADMIN"} showForm={showBookingForm} onShowForm={setShowBookingForm} onNavigate={setActiveView} /> : activeView === "Clients" ? <ClientsView /> : activeView === "Calendar" ? <CalendarView /> : activeView === "Cashflow" ? <MoneyWorkspace key="cash" /> : activeView === "Inventory" ? <InventoryView onNavigate={setActiveView} isAdmin={authUser.role === "ADMIN"} /> : activeView === "Equipment" ? <EquipmentView /> : activeView === "Packages" ? <PackagesView onNavigate={setActiveView} onCreateBooking={() => { setActiveView("Bookings"); setShowBookingForm(true); }} /> : activeView === "Reports" ? <FinancialReports /> : activeView === "Settings" ? <SettingsView user={authUser} /> : <>
+           {activeView === "Assistant" && authUser.role === "ADMIN" ? <AiAssistant /> : activeView === "Team" && authUser.role === "ADMIN" ? <TeamView currentUser={authUser} /> : activeView === "Invoices" && authUser.role === "ADMIN" ? <InvoicesView /> : activeView === "Bookings" ? <BookingsView isAdmin={authUser.role === "ADMIN"} showForm={showBookingForm} onShowForm={setShowBookingForm} onNavigate={setActiveView} /> : activeView === "Clients" ? <ClientsView /> : activeView === "Calendar" ? <CalendarView /> : activeView === "Cashflow" ? <MoneyWorkspace key="cash" /> : activeView === "Inventory" ? <InventoryView onNavigate={setActiveView} isAdmin={authUser.role === "ADMIN"} /> : activeView === "Equipment" ? <EquipmentView /> : activeView === "Packages" ? <PackagesView onNavigate={setActiveView} onCreateBooking={() => { setActiveView("Bookings"); setShowBookingForm(true); }} /> : activeView === "Reports" ? <FinancialReports /> : activeView === "Settings" ? <SettingsView user={authUser} /> : <>
           <section className="page-heading">
             <div>
               <p className="eyebrow">{todayLabel}</p>
