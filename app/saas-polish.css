@@ -207,3 +207,17 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .salikha-mascot, .salikha-mascot-frame, .salikha-mascot-spark { animation: none !important; transform: none !important; }
   .salikha-mascot-blink, .salikha-mascot-excited, .salikha-mascot-spark { display: none; }
 }
+
+/* Rive owns the character motion. Keep the original art as a loading and error fallback. */
+.salikha-mascot--rive,
+.salikha-mascot--rive.salikha-mascot--hero,
+.salikha-mascot--rive.salikha-mascot--thinking,
+.salikha-mascot--rive.salikha-mascot--closeout { animation: none; }
+.salikha-mascot--rive .salikha-mascot-spark { display: none; }
+.salikha-mascot-rive { position: absolute; inset: 0; width: 100%; height: 100%; }
+.salikha-mascot-rive canvas { display: block; width: 100%; height: 100%; }
+.salikha-mascot-fallback { opacity: 1; transition: opacity .2s ease; }
+.salikha-mascot-fallback--hidden { opacity: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .salikha-mascot-fallback { transition: none; }
+}
