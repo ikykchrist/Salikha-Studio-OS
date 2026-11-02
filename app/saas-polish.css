@@ -79,6 +79,34 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .drawer-body > .form-section { border-radius: 13px; box-shadow: var(--saas-shadow); }
 .drawer-footer { border-top: 1px solid var(--line); }
 .workflow-empty { line-height: 1.7; }
+/* Legacy catalog views share the same readable density as Bookings and Clients. */
+:root[data-theme] :is(.inventory-metric,.equipment-metric,.package-metric,.booking-summary-card,.account-card) { min-height: 124px; padding: 20px; }
+:root[data-theme] :is(.inventory-metric,.equipment-metric,.package-metric) > :is(span,small),
+:root[data-theme] :is(.booking-summary-card,.account-card) > :is(span,small) { font-size: 12px; line-height: 1.5; }
+:root[data-theme] :is(.inventory-metric,.equipment-metric,.package-metric) > strong { font-size: clamp(24px, 2vw, 30px); font-weight: 740; letter-spacing: -.04em; margin: 12px 0 5px; }
+:root[data-theme] :is(.inventory-row,.equipment-row,.package-row,.client-row,.booking-row) { background-color: var(--surface); color: var(--ink); font-size: 13px; min-height: 72px; }
+:root[data-theme] :is(.inventory-row,.equipment-row,.package-row,.client-row,.booking-row):is(:hover,.selected) { background-color: color-mix(in srgb, var(--accent) 5%, var(--surface)); }
+:root[data-theme] :is(.inventory-row,.equipment-row,.package-row) span:first-child strong { font-size: 14px; font-weight: 700; line-height: 1.4; }
+:root[data-theme] :is(.inventory-row,.equipment-row,.package-row) span:first-child small { color: var(--muted); font-size: 12px; line-height: 1.4; }
+:root[data-theme] :is(.inventory-head,.equipment-head,.package-head,.client-head,.booking-table-head) { color: var(--muted); font-size: 11px; font-weight: 750; letter-spacing: .07em; }
+:root[data-theme] :is(.inventory-detail,.equipment-detail,.package-detail,.client-detail) { background: var(--surface); border-color: var(--line); padding: 20px; }
+:root[data-theme] :is(.inventory-detail-title,.equipment-detail-title,.package-detail-title) h2 { font-size: 21px; font-weight: 740; letter-spacing: -.03em; }
+:root[data-theme] :is(.inventory-info,.equipment-info,.package-detail-info) small,
+:root[data-theme] :is(.stock-highlight,.package-price) small { color: var(--muted); font-size: 12px; }
+:root[data-theme] :is(.inventory-info,.equipment-info,.package-detail-info) strong { color: var(--ink); font-size: 13px; font-weight: 650; line-height: 1.5; }
+:root[data-theme] :is(.package-detail-title,.package-detail-section) p:not(.eyebrow),
+:root[data-theme] :is(.package-copy,.package-empty-line,.maintenance-empty,.equipment-footer-note) { color: var(--muted); font-size: 13px; line-height: 1.55; }
+:root[data-theme] :is(.inventory-actions,.package-detail-actions) .secondary-button { font-size: 12px; min-height: 40px; }
+:root[data-theme] :is(.stock-pill,.equipment-status,.status-pill,.count-badge) { font-size: 11px; font-weight: 700; line-height: 1.3; }
+:root[data-theme] :is(.recipe-state,.quick-action,.inventory-notice span,.maintenance-alert span) { font-size: 12px; line-height: 1.5; }
+:root[data-theme] :is(.inventory-notice,.maintenance-alert) { border-radius: 13px; }
+:root[data-theme] :is(.calendar-panel,.agenda-panel) { overflow: hidden; }
+:root[data-theme] :is(.booking-section-nav,.client-section-nav,.inventory-section-nav) button[aria-current="page"] { background: var(--surface); color: var(--accent); border-color: var(--line); box-shadow: 0 1px 3px rgb(20 25 35 / 8%); }
+@media (max-width: 620px) {
+  :root[data-theme] :is(.inventory-metric,.equipment-metric,.package-metric,.booking-summary-card,.account-card) { min-height: 105px; padding: 16px; }
+  :root[data-theme] :is(.inventory-row,.equipment-row,.package-row,.client-row,.booking-row) { min-height: 64px; }
+  :root[data-theme] :is(.inventory-detail,.equipment-detail,.package-detail,.client-detail) { padding: 16px; }
+}
 @media (max-width: 900px) { .page-content { padding: 29px 24px 40px; } }
 @media (max-width: 620px) {
   .topbar { height: 60px; }
