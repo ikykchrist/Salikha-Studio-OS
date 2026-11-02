@@ -22,7 +22,7 @@ export async function POST(request: Request) {
     try {
     await client.query("begin");
     await client.query("select pg_advisory_xact_lock(hashtext($1))", [body.id]);
-    const found = await client.query(`select i.*,c.display_name as client_name,c.email as client_email,b.paid_amount as booking_paid,b.event_name,b.event_date,b.start_time,b.end_time,b.venue,p.name as package_name,s.logo_data_url from public.invoices i join public.clients c on c.id=i.client_id left join public.bookings b on b.id=i.booking_id left join public.service_packages p on p.id=b.package_id cross join lateral (select logo_data_url from public.invoice_settings where id=true union all select null::text where not exists(select 1 from public.invoice_settings where id=true) limit 1) s where i.id=$1::uuid`, [body.id]);
+    const found = await client.query(`select i.*,c.display_name as client_name,c.email as client_email,b.paid_amount as booking_paid,b.event_name,b.event_date::text as event_date,b.start_time,b.end_time,b.venue,p.name as package_name,s.logo_data_url from public.invoices i join public.clients c on c.id=i.client_id left join public.bookings b on b.id=i.booking_id left join public.service_packages p on p.id=b.package_id cross join lateral (select logo_data_url from public.invoice_settings where id=true union all select null::text where not exists(select 1 from public.invoice_settings where id=true) limit 1) s where i.id=$1::uuid`, [body.id]);
     if (!found.rowCount) return Response.json({ error: "Invoice not found." }, { status: 404 });
     const invoice = found.rows[0];
     if (!invoice.client_email) return Response.json({ error: "Add an email address to this client before sending the invoice." }, { status: 400 });
