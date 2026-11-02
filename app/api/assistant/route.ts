@@ -15,6 +15,26 @@ export async function GET(request: Request) {
   if (auth.response) return auth.response;
   try {
     const config = await assistantConfig();
+    if (new URL(request.url).searchParams.get("models") === "1") {
+      if (!config) return reply({ error: "Connect Gemini first." }, 409);
+      const models: Array<{ id: string; name: string }> = [];
+      let pageToken = "";
+      for (let page = 0; page < 3; page++) {
+        const url = new URL("https://generativelanguage.googleapis.com/v1beta/models");
+        url.searchParams.set("pageSize", "1000");
+        if (pageToken) url.searchParams.set("pageToken", pageToken);
+        const response = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(10000), headers: { "x-goog-api-key": config.key } });
+        if (!response.ok) return reply({ error: `Google could not list models for this key (HTTP ${response.status}).` }, 502);
+        const result = await response.json() as { models?: Array<{ name?: string; displayName?: string; supportedGenerationMethods?: string[] }>; nextPageToken?: string };
+        for (const item of result.models || []) {
+          const id = item.name?.replace(/^models\//, "") || "";
+          if (/^gemini-[a-z0-9.-]+$/i.test(id) && !/(?:image|audio|tts|live|transcribe|video|embedding)/i.test(id) && item.supportedGenerationMethods?.includes("generateContent")) models.push({ id, name: item.displayName || id });
+        }
+        pageToken = result.nextPageToken || "";
+        if (!pageToken) break;
+      }
+      return reply({ models: models.sort((a, b) => a.name.localeCompare(b.name)) });
+    }
     return reply({ configured: Boolean(config), model: config?.model || "", source: config?.source || "", dailyLimit: 30 });
   } catch { return reply({ error: "Could not check assistant setup." }, 503); }
 }

@@ -9,6 +9,7 @@ The admin-only AI Assistant answers questions with Gemini. It reads a fresh, lim
 3. Alternatively, set `GEMINI_API_KEY` and `GEMINI_MODEL` in the server environment. Environment variables override the saved configuration.
 
 The model metadata check during setup does not prove that the project can run inference. A project may still be restricted by quota, billing, or temporary service capacity. Chat errors show the Gemini HTTP status without exposing the key. Transient `429` and `5xx` responses receive short retries. Administrators can change the model ID in the assistant sidebar without re-entering a key saved in Settings; environment-managed models must be changed in the server environment.
+The model selector loads text-generation model IDs from Google's `models.list` endpoint using the saved key. If a typed model returns HTTP 404, select one from that list. The list shows API-visible models; actual generation still depends on project access and quota.
 
 The assistant is read-only. It cannot create bookings, post payments, send messages, or edit inventory. The Telegram bot remains the booking intake workflow with human confirmation. The AI Assistant currently allows 30 questions per administrator per Manila calendar day. Chats are kept in the current browser view only; refreshing or opening a new chat clears them. Every request is authenticated, same-origin, length-limited, and served without caching.
 
