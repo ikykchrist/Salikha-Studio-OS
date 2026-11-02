@@ -7,14 +7,14 @@ import { formatManilaDate, formatManilaTime } from "../lib/manila-datetime";
 import { exportInvoicePage } from "../lib/invoice-export";
 
 type InvoiceLine = { description: string; quantity: number; unitPrice: number };
-type Booking = { id: string; client_id: string; event_name: string; event_date: string; start_time: string | null; end_time: string | null; venue: string | null; total_amount: number; downpayment_amount: number; paid_amount: number; status: string; client_name: string; client_email: string | null; package_name: string | null };
+type Booking = { id: string; client_id: string; event_name: string; event_date: string | null; start_time: string | null; end_time: string | null; venue: string | null; total_amount: number; downpayment_amount: number; paid_amount: number; status: string; client_name: string; client_email: string | null; package_name: string | null };
 type BookingDetails = { eventName?: string | null; packageName?: string | null; eventDate?: string | null; startTime?: string | null; endTime?: string | null; venue?: string | null };
 type Invoice = { id: string; invoice_number: string; client_id: string; booking_id: string | null; issue_date: string; due_date: string | null; status: "DRAFT" | "SENT" | "PAID" | "VOID"; line_items: InvoiceLine[]; booking_details: BookingDetails; subtotal: number; discount_amount: number; tax_rate: number; tax_amount: number; total_amount: number; notes: string | null; terms: string | null; email_sent_to: string | null; sent_at: string | null; client_name: string; client_email: string | null; event_name: string | null; event_date: string | null; start_time: string | null; end_time: string | null; venue: string | null; package_name: string | null; booking_paid: number | null };
 const peso = (value: number) => `₱${Number(value || 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila" }).format(new Date());
 const addDays = (value: string, days: number) => { const date = new Date(`${value}T12:00:00`); date.setDate(date.getDate() + days); return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila" }).format(date); };
-const dateLabel = (value: string | null) => formatManilaDate(value, { month: "short", day: "numeric", year: "numeric" });
-const timeLabel = formatManilaTime;
+const dateLabel = (value: string | null) => value ? formatManilaDate(value, { month: "short", day: "numeric", year: "numeric" }) : "TBA";
+const timeLabel = (value: string | null | undefined) => value ? formatManilaTime(value) : "TBA";
 
 export function InvoicesView() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -167,7 +167,7 @@ function InvoiceForm({ bookings, onClose, onSave }: { bookings: Booking[]; onClo
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const booking = bookings.find((item) => item.id === bookingId) || null;
-  const choose = (id: string) => { setBookingId(id); const selected = bookings.find((item) => item.id === id); if (selected?.event_date) setDueDate(selected.event_date.slice(0, 10)); };
+  const choose = (id: string) => { setBookingId(id); const selected = bookings.find((item) => item.id === id); setDueDate(selected?.event_date ? selected.event_date.slice(0, 10) : addDays(today(), 7)); };
   const submit = async (event: React.FormEvent<HTMLFormElement>) => { event.preventDefault(); setError(""); if (!bookingId) { setError("Choose an active booking first."); return; } setSaving(true); try { await onSave({ bookingId, dueDate, terms }); } catch (cause) { setError(cause instanceof Error ? cause.message : "Invoice could not be generated."); } finally { setSaving(false); } };
   return <div className="invoice-form-backdrop" role="dialog" aria-modal="true" aria-labelledby="invoice-form-title" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) onClose(); }}><form className="invoice-form-drawer" onSubmit={(event) => void submit(event)}><header className="invoice-form-header"><div><p className="eyebrow">Booking-based invoice</p><h2 id="invoice-form-title">Create invoice</h2></div><button className="close-button" type="button" onClick={onClose} aria-label="Close invoice form"><X aria-hidden="true" /></button></header>
     <div className="invoice-form-body"><p className="invoice-auto-note">Choose an active booking. Client, package, event schedule, venue, and price will come directly from its saved record.</p><div className="invoice-form-fields"><label className="invoice-booking-select">Active booking<select value={bookingId} onChange={(event) => choose(event.target.value)} required><option value="">Select booking</option>{bookings.map((item) => <option key={item.id} value={item.id}>{item.event_name} · {dateLabel(item.event_date)} · {item.client_name}</option>)}</select></label><label>Due date<input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} required /></label></div>

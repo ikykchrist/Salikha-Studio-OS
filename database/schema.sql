@@ -93,7 +93,7 @@ create table public.bookings (
   client_id uuid not null references public.clients(id),
   package_id uuid references public.service_packages(id),
   event_name text not null check (length(trim(event_name)) > 0),
-  event_date date not null,
+  event_date date,
   start_time time,
   end_time time,
   venue text,

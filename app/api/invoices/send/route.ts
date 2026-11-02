@@ -32,8 +32,8 @@ export async function POST(request: Request) {
     const lines = invoice.line_items as Array<{ description: string; quantity: number; unitPrice: number }>;
     const bookingSnapshot = (invoice.booking_details || {}) as { eventName?: string; packageName?: string; eventDate?: string; startTime?: string; endTime?: string; venue?: string };
     const booking = { eventName: invoice.event_name || bookingSnapshot.eventName, packageName: invoice.package_name || bookingSnapshot.packageName, eventDate: invoice.event_date || bookingSnapshot.eventDate, startTime: invoice.start_time || bookingSnapshot.startTime, endTime: invoice.end_time || bookingSnapshot.endTime, venue: invoice.venue || bookingSnapshot.venue };
-    const eventDate = formatManilaDate(booking.eventDate, { month: "long", day: "numeric", year: "numeric" });
-    const clock = formatManilaTime;
+    const eventDate = booking.eventDate ? formatManilaDate(booking.eventDate, { month: "long", day: "numeric", year: "numeric" }) : "TBA";
+    const clock = (value: string | null | undefined) => value ? formatManilaTime(value) : "TBA";
     const paid = Math.min(Number(invoice.total_amount), Number(invoice.booking_paid || 0));
     const balance = Math.max(0, Number(invoice.total_amount) - paid);
     const logo = typeof invoice.logo_data_url === "string" && invoice.logo_data_url.startsWith("data:image/png;base64,") ? invoice.logo_data_url.slice("data:image/png;base64,".length) : null;

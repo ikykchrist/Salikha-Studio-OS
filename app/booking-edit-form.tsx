@@ -81,7 +81,7 @@ export function BookingEditForm({ booking, onClose, onSave }: { booking: Booking
   }, [packageId]);
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault(); setError("");
-    if (!eventName.trim() || !date || !Number.isFinite(Number(total)) || Number(total) < Number(booking.paidAmount || 0)) { setError("Enter an event, date, and total at least as much as payments already received."); return; }
+    if (!eventName.trim() || !Number.isFinite(Number(total)) || Number(total) < Number(booking.paidAmount || 0)) { setError("Enter an event and total at least as much as payments already received."); return; }
     if (packageLoadError || !packages.length && packageId || addonError || addonLoading) { setError(addonError || "Package add-ons could not be verified. Retry before saving."); return; }
     setSaving(true);
     try { await onSave({ ...booking, eventName: eventName.trim(), date, startTime, endTime, venue: venue.trim(), mapsUrl: mapsUrl.trim(), packageId: packageId || null, packageName: chosenPackage?.name || (packageId ? booking.packageName : "Custom service"), addonIds: selectedAddonIds, total: Number(total), status }); }
@@ -119,7 +119,7 @@ export function BookingEditForm({ booking, onClose, onSave }: { booking: Booking
       <div className="drawer-body"><div className="form-section"><div className="form-grid">
         <label className="wide-field">Client<input value={booking.client} readOnly /></label>
         <label className="wide-field">Event name<input value={eventName} onChange={(event) => setEventName(event.target.value)} required /></label>
-        <label>Event date<input type="date" value={date} onChange={(event) => setDate(event.target.value)} required /></label>
+        <p className="workflow-help wide-field">Leave date or either time blank for TBA. Saving a complete schedule creates or moves the Google Calendar event.</p><label>Event date<input type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label>
         <label>Start time<input type="time" value={startTime} onChange={(event) => setStartTime(event.target.value)} /></label>
         <label>End time<input type="time" value={endTime} onChange={(event) => setEndTime(event.target.value)} /></label>
         <label className="wide-field">Venue<input value={venue} onChange={(event) => setVenue(event.target.value)} /></label>
