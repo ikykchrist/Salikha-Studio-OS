@@ -151,3 +151,51 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .page-content, .page-content .page-heading { animation: none; }
   .page-content :is(.metric-card,.booking-summary-card,.inventory-metric,.equipment-metric,.package-metric,.account-card,.settings-card,.report-kpi):hover { transform: none; }
 }
+
+/* The mascot is decorative and never intercepts workspace controls. */
+.salikha-mascot { position: relative; display: inline-block; flex: none; width: 36px; height: 46px; pointer-events: none; isolation: isolate; animation: mascot-breathe 3.6s ease-in-out infinite; }
+.salikha-mascot-frame { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; object-position: center; }
+.salikha-mascot-blink, .salikha-mascot-excited { opacity: 0; }
+.salikha-mascot--expressive .salikha-mascot-base { animation: mascot-base 9s steps(1) infinite; }
+.salikha-mascot--expressive .salikha-mascot-blink { animation: mascot-blink 9s steps(1) infinite; }
+.salikha-mascot--expressive .salikha-mascot-excited { animation: mascot-excited 9s steps(1) infinite; }
+.salikha-mascot-spark { position: absolute; top: 32%; right: 5%; width: 18px; height: 18px; border-radius: 50%; background: radial-gradient(circle, #fff 0 13%, #fff9bf 19%, #f9c65d 34%, transparent 70%); opacity: 0; transform: scale(.3); animation: mascot-flash 9s ease-out infinite; }
+.salikha-mascot--mini { width: 28px; height: 37px; margin-right: 5px; }
+.salikha-mascot--mini .salikha-mascot-spark, .salikha-mascot--avatar .salikha-mascot-spark, .salikha-mascot--empty .salikha-mascot-spark { display: none; }
+.salikha-mascot--hero { width: 156px; height: 190px; animation: mascot-wave 3.8s ease-in-out infinite; }
+.salikha-mascot--avatar { width: 37px; height: 43px; }
+.salikha-mascot--thinking { animation: mascot-think 2.4s ease-in-out infinite; }
+.salikha-mascot--empty { width: 102px; height: 124px; margin-bottom: 8px; }
+.salikha-mascot--closeout { display: block; width: 116px; height: 140px; margin: -18px auto -3px; animation: mascot-celebrate .85s ease-in-out infinite alternate; }
+.salikha-mascot--closeout .salikha-mascot-spark { animation: mascot-party-spark 1.7s ease-out infinite; }
+.mascot-overview-heading { min-height: 171px; }
+.mascot-overview-actions { display: flex; align-items: center; gap: 16px; align-self: center; }
+.mascot-overview-actions .primary-button { white-space: nowrap; }
+.assistant-avatar { overflow: hidden; padding: 0; }
+.assistant-avatar .salikha-mascot { margin-top: 3px; }
+.assistant-empty > .salikha-mascot { display: block; margin-inline: auto; }
+@keyframes mascot-breathe { 0%,100% { transform: translateY(0) rotate(-1deg); } 50% { transform: translateY(-4px) rotate(1deg); } }
+@keyframes mascot-wave { 0%,100% { transform: translateY(0) rotate(-3deg); } 30% { transform: translateY(-7px) rotate(3deg); } 62% { transform: translateY(-3px) rotate(-2deg); } }
+@keyframes mascot-think { 0%,100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-3px) rotate(3deg); } }
+@keyframes mascot-celebrate { from { transform: translateY(1px) rotate(-7deg) scale(.98); } to { transform: translateY(-13px) rotate(8deg) scale(1.05); } }
+@keyframes mascot-base { 0%,23%,27%,66%,100% { opacity: 1; } 24%,26%,67%,79% { opacity: 0; } }
+@keyframes mascot-blink { 0%,23%,27%,100% { opacity: 0; } 24%,26% { opacity: 1; } }
+@keyframes mascot-excited { 0%,66%,80%,100% { opacity: 0; } 67%,79% { opacity: 1; } }
+@keyframes mascot-flash { 0%,69%,76%,100% { opacity: 0; transform: scale(.3); } 71% { opacity: .95; transform: scale(2.1); } }
+@keyframes mascot-party-spark { 0%,30%,100% { opacity: 0; transform: scale(.2); } 48% { opacity: 1; transform: scale(2.4); } 65% { opacity: 0; transform: scale(3.2); } }
+@media (max-width: 620px) {
+  .salikha-mascot--hero { width: 100px; height: 125px; }
+  .mascot-overview-heading { min-height: 0; align-items: center; }
+  .mascot-overview-actions { gap: 7px; }
+  .mascot-overview-actions .primary-button { min-height: 42px; padding-inline: 12px; font-size: 12px; }
+  .salikha-mascot--mini { width: 23px; height: 30px; margin-right: 1px; }
+}
+@media (max-width: 390px) {
+  .mascot-overview-heading { flex-wrap: wrap; }
+  .mascot-overview-actions { width: 100%; justify-content: space-between; }
+  .salikha-mascot--hero { width: 72px; height: 88px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .salikha-mascot, .salikha-mascot-frame, .salikha-mascot-spark { animation: none !important; transform: none !important; }
+  .salikha-mascot-blink, .salikha-mascot-excited, .salikha-mascot-spark { display: none; }
+}

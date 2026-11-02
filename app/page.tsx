@@ -29,6 +29,7 @@ import {PrinterInkTracker} from "./printer-ink-tracker";
 import { InventoryMovementForm } from "./inventory-movement-form";
 import { StatusBadge } from "./status-badge";
 import { AiAssistant } from "./ai-assistant";
+import { Mascot } from "./mascot";
 import { InvoicesView } from "./invoices-view";
 
 const navigation = [
@@ -205,7 +206,7 @@ export default function Home() {
       {sidebarOpen && <button className="sidebar-overlay" type="button" onClick={() => setSidebarOpen(false)} aria-label="Close navigation" />}
       <main className="main-content">
         <header className="topbar">
-          <div className="topbar-left"><button className="sidebar-toggle" type="button" onClick={() => setSidebarOpen((open) => !open)} aria-label={sidebarOpen ? "Close navigation" : "Open navigation"}><Menu aria-hidden="true" /></button><div className="breadcrumb"><span>Workspace</span><b>/</b><strong>{activeView}</strong></div></div>
+          <div className="topbar-left"><button className="sidebar-toggle" type="button" onClick={() => setSidebarOpen((open) => !open)} aria-label={sidebarOpen ? "Close navigation" : "Open navigation"}><Menu aria-hidden="true" /></button><Mascot mood="welcome" /><div className="breadcrumb"><span>Workspace</span><b>/</b><strong>{activeView}</strong></div></div>
           <div className="topbar-actions">
             <span className="system-status"><i /> System ready</span>
             <button className="icon-button" type="button" aria-label="Toggle dark mode" title={darkMode ? "Switch to light mode" : "Switch to dark mode"} onClick={toggleTheme}>{darkMode ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}</button>
@@ -216,13 +217,13 @@ export default function Home() {
 
         <div className="page-content" key={activeView}>
            {activeView === "Assistant" && authUser.role === "ADMIN" ? <AiAssistant /> : activeView === "Team" && authUser.role === "ADMIN" ? <TeamView currentUser={authUser} /> : activeView === "Invoices" && authUser.role === "ADMIN" ? <InvoicesView /> : activeView === "Bookings" ? <BookingsView isAdmin={authUser.role === "ADMIN"} showForm={showBookingForm} onShowForm={setShowBookingForm} onNavigate={setActiveView} /> : activeView === "Clients" ? <ClientsView /> : activeView === "Calendar" ? <CalendarView /> : activeView === "Cashflow" ? <MoneyWorkspace key="cash" /> : activeView === "Inventory" ? <InventoryView onNavigate={setActiveView} isAdmin={authUser.role === "ADMIN"} /> : activeView === "Equipment" ? <EquipmentView /> : activeView === "Packages" ? <PackagesView onNavigate={setActiveView} onCreateBooking={() => { setActiveView("Bookings"); setShowBookingForm(true); }} /> : activeView === "Reports" ? <FinancialReports /> : activeView === "Settings" ? <SettingsView user={authUser} /> : <>
-          <section className="page-heading">
+          <section className="page-heading mascot-overview-heading">
             <div>
               <p className="eyebrow">{todayLabel}</p>
               <h1>{greeting}, Studio.</h1>
               <p className="subheading">Here is the operational pulse of your business.</p>
             </div>
-            <button className="primary-button" type="button" onClick={() => { setActiveView("Bookings"); setShowBookingForm(true); }}><Plus aria-hidden="true" /> New booking</button>
+            <div className="mascot-overview-actions"><Mascot mood="welcome" size="hero" expressive /><button className="primary-button" type="button" onClick={() => { setActiveView("Bookings"); setShowBookingForm(true); }}><Plus aria-hidden="true" /> New booking</button></div>
           </section>
 
           <section className="metric-grid" aria-label="Business metrics">

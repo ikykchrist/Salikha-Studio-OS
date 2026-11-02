@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bot, Check, Database, KeyRound, Send, Sparkles } from "lucide-react";
+import { Check, Database, KeyRound, Send } from "lucide-react";
+import { Mascot } from "./mascot";
 
 type Message = { role: "user" | "model"; text: string };
 type Setup = { configured: boolean; model?: string; source?: string; dailyLimit?: number };
@@ -83,11 +84,11 @@ export function AiAssistant() {
     <div className="page-heading"><div><p className="eyebrow">Salikha Studio OS</p><h1>Studio assistant</h1><p className="subheading">Ask about your bookings, money, stock and next steps.</p></div><button className="secondary-button" type="button" disabled={busy || !messages.length} onClick={() => { setMessages([]); setDraft(""); setError(""); setAsOf(""); }}>New chat</button></div>
     <div className="assistant-layout">
       <div className="assistant-chat panel">
-        <div className="assistant-chat-top"><div className="assistant-avatar"><Bot aria-hidden="true" /></div><div><strong>Salikha assistant</strong><small>{setup?.configured ? `${setup.model} · Admin only` : "Gemini setup needed"}</small></div><span className="assistant-live-dot" aria-hidden="true" /></div>
+        <div className="assistant-chat-top"><div className="assistant-avatar"><Mascot mood={busy ? "thinking" : messages.length ? "excited" : "welcome"} size="avatar" /></div><div><strong>Salikha assistant</strong><small>{setup?.configured ? `${setup.model} · Admin only` : "Gemini setup needed"}</small></div><span className="assistant-live-dot" aria-hidden="true" /></div>
         {!setup && !error && <p role="status" className="assistant-empty">Checking setup…</p>}
         {setup && !setup.configured && <div className="assistant-empty"><KeyRound aria-hidden="true" /><h2>Connect Gemini</h2><p>Save a Gemini API key and model ID below to start. Your key stays encrypted on the server.</p></div>}
         {setup?.configured && <div className="assistant-messages" role="log" aria-label="Assistant conversation" aria-live="polite">
-          {!messages.length && <div className="assistant-empty"><Sparkles aria-hidden="true" /><h2>What can I help with?</h2><p>Choose a starting question or type your own. Live studio data is refreshed for each answer when enabled.</p><div className="assistant-prompts">{(liveData ? livePrompts : generalPrompts).map(prompt => <button key={prompt} type="button" onClick={() => void send(prompt)} disabled={busy}>{prompt}</button>)}</div></div>}
+          {!messages.length && <div className="assistant-empty"><Mascot mood="thinking" size="empty" /><h2>What can I help with?</h2><p>Choose a starting question or type your own. Live studio data is refreshed for each answer when enabled.</p><div className="assistant-prompts">{(liveData ? livePrompts : generalPrompts).map(prompt => <button key={prompt} type="button" onClick={() => void send(prompt)} disabled={busy}>{prompt}</button>)}</div></div>}
           {messages.map((message, index) => <div className={`assistant-message ${message.role === "user" ? "is-user" : "is-model"}`} key={index}><span>{message.role === "user" ? "You" : "Studio assistant"}</span><p>{message.text}</p></div>)}
           {busy && <div className="assistant-message is-model" role="status"><span>Studio assistant</span><p>Checking and preparing an answer…</p></div>}
           <div ref={endRef} />

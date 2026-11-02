@@ -2,6 +2,7 @@
 import type {CSSProperties} from 'react';
 import {useState} from 'react';
 import {CircleCheck,WalletCards,Boxes,PartyPopper,ArrowRight} from 'lucide-react';
+import {Mascot} from './mascot';
 export type CloseoutSummary={estimatedInk?:{sheets:number;totalMl:number;cost:number;printerNo:number;unknownLevels:number;lowEstimate:boolean}|null;recordedReceipts:number;inventoryItemsUpdated:number;unpaidCosts:number;consumablesCost:number;transportationCost:number;operatorSalary:number;totalDirectCosts:number};
 const peso=(n:number)=>`₱${n.toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
 export function CloseoutSuccess({bookingName,summary,onClose}:{bookingName:string;summary:CloseoutSummary;onClose:()=>void}){
@@ -9,6 +10,7 @@ export function CloseoutSuccess({bookingName,summary,onClose}:{bookingName:strin
  return <section className="calendar-setup-dialog reconciliation-dialog closeout-success">
   <div className="closeout-confetti" aria-hidden="true">{Array.from({length:32},(_,i)=><i key={i} style={{'--x':`${(i*37)%100}%`,'--delay':`${(i%8)*.07}s`,'--turn':`${i%2?720:-540}deg`,'--drift':`${(i%5-2)*45}px`,'--confetti-color':['#df334f','#f5b942','#40b88b','#a790ef'][i%4]} as CSSProperties}/>)}</div>
   <div className="closeout-medal" aria-hidden="true"><CircleCheck/></div>
+  <Mascot mood="celebrate" size="closeout" />
   <p className="eyebrow">Another event, another happy memory</p>
   <h2 id="reconciliation-title">Great work, Salikha team!</h2>
   <p className="closeout-success-lead">Event completed. Closeout saved.</p>
