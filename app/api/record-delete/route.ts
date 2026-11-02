@@ -1,6 +1,6 @@
 import { requireUser, verifyPassword } from "../../../lib/auth";
 import { getLocalPostgresPool } from "../../../lib/local-postgres";
-import { googleApi, googleCalendarConfigured } from "../../../lib/google-calendar";
+import { googleAccessToken } from "../../../lib/google-calendar";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,8 +18,16 @@ export async function POST(request: Request) {
     return Response.json({ error: "A valid record and table are required." }, { status: 400 });
   }
 
+  // The production pool has one connection. Resolve OAuth before opening the
+  // deletion transaction so a token refresh cannot wait on our own lock.
+  let calendarToken = "";
+  let calendarTokenError = "";
+  if (table === "bookings") {
+    try { calendarToken = await googleAccessToken(); }
+    catch (error) { calendarTokenError = error instanceof Error ? error.message : "Google Calendar is unavailable."; }
+  }
   const client = await getLocalPostgresPool().connect();
-  let syncedCalendarEvent: { google_event_id: string; calendar_id: string | null } | null = null;
+  let calendarEventToDelete: { google_event_id: string; calendar_id: string | null } | undefined;
   try {
     await client.query("begin");
     const found = await client.query(`select id from public."${table}" where id = $1::uuid for update`, [id]);
@@ -86,7 +94,7 @@ export async function POST(request: Request) {
 
         const linkedExpenses = await client.query("select id from public.expenses where booking_id = $1::uuid", [id]);
         const calendarResult = await client.query("select google_event_id, calendar_id from public.calendar_events where booking_id = $1::uuid and google_event_id is not null limit 1", [id]);
-        syncedCalendarEvent = calendarResult.rows[0] ?? null;
+        calendarEventToDelete = calendarResult.rows[0] as { google_event_id: string; calendar_id: string | null } | undefined;
         const expenseIds = linkedExpenses.rows.map((row: { id: string }) => row.id);
         const generatedReferences = [
           `booking-completion:${id}:downpayment`,
@@ -109,19 +117,26 @@ export async function POST(request: Request) {
       // Keep the original Telegram intake for audit while removing its reference
       // to a booking that the administrator has chosen to delete.
       await client.query("update public.telegram_booking_drafts set booking_id = null, updated_at = now() where booking_id = $1::uuid", [id]);
+      if (calendarEventToDelete) {
+        if (!calendarToken || !calendarEventToDelete.calendar_id) {
+          await client.query("rollback");
+          return Response.json({ error: `Booking was kept because its Google Calendar event could not be removed. ${calendarTokenError || "Reconnect Google Calendar and retry."}` }, { status: 503 });
+        }
+        const calendarResponse = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarEventToDelete.calendar_id)}/events/${encodeURIComponent(calendarEventToDelete.google_event_id)}`, {
+          method: "DELETE", cache: "no-store", signal: AbortSignal.timeout(12000),
+          headers: { authorization: `Bearer ${calendarToken}` },
+        });
+        // Google reports an already removed event as 404 or 410.
+        if (!calendarResponse.ok && calendarResponse.status !== 404 && calendarResponse.status !== 410) {
+          await client.query("rollback");
+          return Response.json({ error: `Booking was kept because Google Calendar could not remove the event (HTTP ${calendarResponse.status}). Retry the deletion.` }, { status: 502 });
+        }
+      }
     }
 
     await client.query(`delete from public."${table}" where id = $1::uuid`, [id]);
     await client.query("commit");
-    if (table === "bookings" && syncedCalendarEvent) {
-      if (googleCalendarConfigured() && syncedCalendarEvent.calendar_id) {
-        try { await googleApi(`/calendars/${encodeURIComponent(syncedCalendarEvent.calendar_id)}/events/${encodeURIComponent(syncedCalendarEvent.google_event_id)}`, { method: "DELETE" }); }
-        catch { return Response.json({ action: "deleted", message: "Booking and linked local records were deleted, but the Google Calendar event could not be removed. Please remove it from Google Calendar manually.", calendarCleanupWarning: true }); }
-      } else {
-        return Response.json({ action: "deleted", message: "Booking and linked local records were deleted, but the linked Google Calendar event could not be removed because calendar credentials are unavailable.", calendarCleanupWarning: true });
-      }
-    }
-    return Response.json({ action: "deleted", message: "Record deleted." });
+    return Response.json({ action: "deleted", message: table === "bookings" ? (calendarEventToDelete ? "Booking and its Google Calendar event were deleted." : "Booking deleted.") : "Record deleted." });
   } catch (error) {
     await client.query("rollback").catch(() => undefined);
     return Response.json({ error: error instanceof Error ? error.message : "Record could not be removed." }, { status: 500 });
