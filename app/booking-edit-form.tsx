@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { MapPin, ShieldCheck, X } from "lucide-react";
 import { showConfirm, showNotice } from "../lib/ui-dialogs";
 
-type BookingRecord = { id: string; client: string; eventName: string; date: string; startTime: string; endTime: string; venue: string; mapsUrl?: string; packageName: string; total: number; paidAmount?: number; downpaymentAmount?: number; status: "PENDING" | "DONE" | "CANCELLED"; preparation: { layoutReady: boolean; venueReady: boolean; backdropColor: string | null } };
+type BookingRecord = { id: string; client: string; eventName: string; date: string; startTime: string; endTime: string; venue: string; mapsUrl?: string; packageId?: string | null; packageName: string; total: number; paidAmount?: number; downpaymentAmount?: number; status: "PENDING" | "DONE" | "CANCELLED"; preparation: { layoutReady: boolean; venueReady: boolean; backdropColor: string | null } };
+type PackageOption = { id: string; name: string; base_price: number; duration: string | null; inclusions: string | null; is_active: boolean };
 
 export function BookingEditForm({ booking, onClose, onSave }: { booking: BookingRecord; onClose: () => void; onSave: (booking: BookingRecord) => void | Promise<void> }) {
   const [eventName, setEventName] = useState(booking.eventName);
@@ -13,9 +14,11 @@ export function BookingEditForm({ booking, onClose, onSave }: { booking: Booking
   const [endTime, setEndTime] = useState(booking.endTime);
   const [venue, setVenue] = useState(booking.venue);
   const [mapsUrl, setMapsUrl] = useState(booking.mapsUrl || "");
-  const [packageName, setPackageName] = useState(booking.packageName);
+  const [packageId, setPackageId] = useState(booking.packageId || "");
+  const [packages, setPackages] = useState<PackageOption[]>([]);
+  const [packageLoadError, setPackageLoadError] = useState("");
+  const [recipeCost, setRecipeCost] = useState<number | null>(null);
   const [total, setTotal] = useState(String(booking.total));
-  const [downpayment, setDownpayment] = useState(String(booking.downpaymentAmount || 0));
   const [status, setStatus] = useState(booking.status);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -23,11 +26,36 @@ export function BookingEditForm({ booking, onClose, onSave }: { booking: Booking
   const [adminPassword, setAdminPassword] = useState("");
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch("/api/booking-packages", { cache: "no-store" });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Could not load packages.");
+        if (!cancelled) setPackages(result.packages);
+      } catch (cause) { if (!cancelled) setPackageLoadError(cause instanceof Error ? cause.message : "Could not load packages."); }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+  const chosenPackage = packages.find((item) => item.id === packageId);
+  const packageChanged = packageId !== (booking.packageId || "");
+  useEffect(() => {
+    if (!packageId) { setRecipeCost(null); return; }
+    let cancelled = false;
+    setRecipeCost(null);
+    void fetch(`/api/package-recipe?packageId=${encodeURIComponent(packageId)}`, { cache: "no-store" })
+      .then(async (response) => { if (!response.ok) throw new Error("Recipe unavailable."); return response.json(); })
+      .then((result) => { if (!cancelled) setRecipeCost((result.data as Array<{ lineCost: string }>).reduce((sum, line) => sum + Number(line.lineCost || 0), 0)); })
+      .catch(() => { if (!cancelled) setRecipeCost(null); });
+    return () => { cancelled = true; };
+  }, [packageId]);
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault(); setError("");
-    if (!eventName.trim() || !date || Number(total) < 0 || Number(downpayment) < 0 || Number(downpayment) > Number(total)) return;
+    if (!eventName.trim() || !date || !Number.isFinite(Number(total)) || Number(total) < Number(booking.paidAmount || 0)) { setError("Enter an event, date, and total at least as much as payments already received."); return; }
+    if (packageLoadError || !packages.length && packageId) { setError("Packages could not be verified. Retry before saving."); return; }
     setSaving(true);
-    try { await onSave({ ...booking, eventName: eventName.trim(), date, startTime, endTime, venue: venue.trim(), mapsUrl: mapsUrl.trim(), packageName: packageName.trim(), total: Number(total), downpaymentAmount: Number(downpayment), status }); }
+    try { await onSave({ ...booking, eventName: eventName.trim(), date, startTime, endTime, venue: venue.trim(), mapsUrl: mapsUrl.trim(), packageId: packageId || null, packageName: chosenPackage?.name || (packageId ? booking.packageName : "Custom service"), total: Number(total), status }); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Could not save booking."); }
     finally { setSaving(false); }
   };
@@ -67,8 +95,10 @@ export function BookingEditForm({ booking, onClose, onSave }: { booking: Booking
         <label>End time<input type="time" value={endTime} onChange={(event) => setEndTime(event.target.value)} /></label>
         <label className="wide-field">Venue<input value={venue} onChange={(event) => setVenue(event.target.value)} /></label>
         <label className="wide-field">Google Maps link<div className="input-with-icon"><MapPin aria-hidden="true" /><input type="url" value={mapsUrl} onChange={(event) => setMapsUrl(event.target.value)} placeholder="Paste Maps link (optional)" /></div></label>
-        <label>Package<input value={packageName} onChange={(event) => setPackageName(event.target.value)} /></label>
-        <label>Total<div className="money-input"><span>₱</span><input value={total} onChange={(event) => setTotal(event.target.value)} inputMode="decimal" required /></div></label>
+        <label className="wide-field">Package<select value={packageId} onChange={(event) => { const nextId = event.target.value; setPackageId(nextId); const item = packages.find((entry) => entry.id === nextId); if (item) setTotal(String(item.base_price)); }} disabled={Boolean(packageLoadError) || saving}><option value="">Custom service</option>{packages.filter((item) => item.is_active || item.id === booking.packageId).map((item) => <option key={item.id} value={item.id}>{item.name}{!item.is_active ? " (archived)" : ""} · ₱{Number(item.base_price).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</option>)}</select></label>
+        {packageLoadError && <p className="form-warning" role="alert">{packageLoadError}</p>}
+        {chosenPackage && <div className="workflow-callout"><strong>{chosenPackage.name}</strong><small>{chosenPackage.duration || "Duration not set"} · {chosenPackage.inclusions || "No inclusions listed"}</small>{recipeCost !== null && <small>Recipe cost: ₱{recipeCost.toLocaleString("en-PH", { minimumFractionDigits: 2 })} · Estimated profit: ₱{(Number(total) - recipeCost).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</small>}{packageChanged && <small>Package changed. Review the booking total below before saving.</small>}</div>}
+        <label>Total<div className="money-input"><span>₱</span><input type="number" min={booking.paidAmount || 0} step="0.01" value={total} onChange={(event) => setTotal(event.target.value)} required /></div></label>
         <div className="workflow-callout"><strong>Downpayment: ₱{Number(booking.downpaymentAmount || 0).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</strong><small>Remaining balance: ₱{Math.max(0,Number(total)-Number(booking.paidAmount || 0)).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</small>Recorded payments: ₱{Number(booking.paidAmount || 0).toLocaleString("en-PH", { minimumFractionDigits: 2 })}<small>Payments are recorded in Collect payment or Cashflow. Completing an event requires full payment and does not create a receipt.</small></div>
         <label>Status<select value={status} onChange={(event) => setStatus(event.target.value as BookingRecord["status"])}><option value="PENDING">Pending</option><option value="DONE">Done</option><option value="CANCELLED">Cancelled</option></select></label>
       </div>{error && <p className="form-warning" role="alert">{error}</p>}</div></div>

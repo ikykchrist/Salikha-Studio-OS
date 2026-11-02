@@ -249,7 +249,9 @@ create table public.inventory_items (
 
 create table public.inventory_movements (
   id uuid primary key default gen_random_uuid(),
-  inventory_item_id uuid not null references public.inventory_items(id),
+  inventory_item_id uuid references public.inventory_items(id) on delete set null,
+  item_name text,
+  item_unit text,
   booking_id uuid references public.bookings(id),
   movement_type text not null check (movement_type in ('STOCK_IN', 'USAGE', 'RETURN', 'ADJUSTMENT')),
   quantity numeric(12,3) not null check (quantity > 0),
@@ -311,7 +313,7 @@ create table public.booking_consumable_usage (
   unit text not null default 'piece',
   ink_color text,
   ink_level smallint check (ink_level between 0 and 5),
-  inventory_item_id uuid references public.inventory_items(id),
+  inventory_item_id uuid references public.inventory_items(id) on delete set null,
   unit_cost numeric(12,2) not null default 0 check (unit_cost >= 0),
   pcs_per_unit numeric(12,3) not null default 1 check (pcs_per_unit > 0),
   created_by uuid,
