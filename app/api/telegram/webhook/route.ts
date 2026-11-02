@@ -33,7 +33,7 @@ async function editDraft(chatId:number,userId:number,text:string) {
   if(!current){await sendTelegramMessage(chatId,"No open draft. Paste a client booking form first.");return;}
   const draft={...current.parsed};
   const client=text.match(/^\/?client\s+([\s\S]+)$/i);
-  const edit=text.match(/^\/?edit\s+(client|event|date|time|venue|package|price|phone|balance|theme|guests)\s+([\s\S]+)$/i);
+  const edit=text.match(/^\/?edit\s+(client|event|date|time|venue|package|price|phone|email|balance|theme|guests|addons|template|backdrop|requests)\s+([\s\S]+)$/i);
   if(client) draft.clientName=client[1].trim();
   else if(edit){
     const value=edit[2].trim();
@@ -47,9 +47,14 @@ async function editDraft(chatId:number,userId:number,text:string) {
       case "package": draft.packageName=value; break;
       case "price": draft.total=Number(value.replace(/[₱,\s]/g,"")); if(!Number.isFinite(draft.total)||draft.total<0)throw Error("Use a price like 5500."); break;
       case "phone": draft.phone=value; break;
+      case "email": draft.email=value; break;
       case "balance": draft.statedBalance=parsed.statedBalance; if(draft.statedBalance===null)throw Error("Use a balance like 5000."); break;
       case "theme": draft.theme=value; break;
       case "guests": draft.guestCount=value; break;
+      case "addons": draft.addons=value; break;
+      case "template": draft.templateNumber=value; break;
+      case "backdrop": draft.backdropColor=value; break;
+      case "requests": draft.otherRequests=value; break;
     }
   }else{await sendTelegramMessage(chatId,"Use `client Maria Santos` or `edit date 2026-10-08`, `edit time 3pm to 5pm`, `edit price 5500`. Send `edit date TBA` to clear a date.");return;}
   await getLocalPostgresPool().query("update public.telegram_booking_drafts set parsed=$2::jsonb,updated_at=now() where id=$1::uuid and telegram_user_id=$3 and status='DRAFT'",[current.id,JSON.stringify(draft),userId]);
@@ -75,10 +80,10 @@ async function confirmDraft(chatId:number,userId:number,id:string,override:boole
     const existing=await db.query("select id,event_name from public.bookings where lower(trim(event_name))=lower($1) and event_date is not distinct from nullif($2,'')::date and status not in ('CANCELLED','ARCHIVED') limit 1",[draft.eventName,draft.date]);
     const overlap=draft.date&&draft.startTime&&draft.endTime?await db.query("select id,event_name from public.bookings where event_date=$1::date and start_time<$3::time and end_time>$2::time and status not in ('CANCELLED','ARCHIVED') limit 1",[draft.date,draft.startTime,draft.endTime]):{rows:[]};
     if(!override&&(existing.rows[0]||overlap.rows[0])){await db.query("rollback");const other=existing.rows[0]||overlap.rows[0];return {text:`⚠️ Possible ${existing.rows[0]?"duplicate booking":"schedule overlap"}: ${other.event_name}. Review before saving.`,buttons:[[{text:"Save anyway",callback_data:`override:${id}`},{text:"Cancel",callback_data:`cancel:${id}`}]]};}
-    const clientId=clients.rows[0]?.id||(await db.query("insert into public.clients(display_name,phone) values($1,$2) returning id",[draft.clientName,draft.phone||null])).rows[0].id;
+    const clientId=clients.rows[0]?.id||(await db.query("insert into public.clients(display_name,phone,email) values($1,$2,$3) returning id",[draft.clientName,draft.phone||null,draft.email||null])).rows[0].id;
     const packageRow=draft.packageName?(await db.query("select id,name from public.service_packages where lower(trim(name))=lower($1) and is_active=true limit 1",[draft.packageName])).rows[0]:null;
-    const notes=["Telegram booking intake",draft.packageName&&!packageRow?`Requested package: ${draft.packageName} (not matched to catalog)`:"",draft.celebrant?`Celebrant: ${draft.celebrant}`:"",draft.theme?`Design theme: ${draft.theme}`:"",draft.guestCount?`Estimated guests: ${draft.guestCount}`:"",draft.celebrantPhoto?`Celebrant photo: ${draft.celebrantPhoto}`:"",draft.statedBalance!==null?`Client-stated balance: ₱${draft.statedBalance.toFixed(2)}; payment not verified or posted.`:""].filter(Boolean).join("\n");
-    const saved=await db.query("insert into public.bookings(client_id,package_id,event_name,event_date,start_time,end_time,venue,total_amount,notes) values($1,$2,$3,nullif($4,'')::date,nullif($5,'')::time,nullif($6,'')::time,$7,$8,$9) returning id",[clientId,packageRow?.id||null,draft.eventName,draft.date,draft.startTime,draft.endTime,draft.venue||null,draft.total,notes]);
+    const notes=["Telegram booking intake",`Original client form:\n${row.source_text}`,"Confirmed draft details:",draft.packageName&&!packageRow?`Requested package: ${draft.packageName} (not matched to catalog)`:"",draft.email?`Email: ${draft.email}`:"",draft.phone?`Phone: ${draft.phone}`:"",draft.addons?`Add-ons requested: ${draft.addons}`:"",draft.templateNumber?`Template number: ${draft.templateNumber}`:"",draft.backdropColor?`Backdrop color: ${draft.backdropColor}`:"",draft.otherRequests?`Other requests: ${draft.otherRequests}`:"",draft.celebrant?`Celebrant: ${draft.celebrant}`:"",draft.theme?`Design theme: ${draft.theme}`:"",draft.guestCount?`Estimated guests: ${draft.guestCount}`:"",draft.celebrantPhoto?`Celebrant photo: ${draft.celebrantPhoto}`:"",draft.statedBalance!==null?`Client-stated balance: ₱${draft.statedBalance.toFixed(2)}; payment not verified or posted.`:""].filter(Boolean).join("\n");
+    const saved=await db.query("insert into public.bookings(client_id,package_id,event_name,event_date,start_time,end_time,venue,total_amount,notes,preparation_backdrop_color) values($1,$2,$3,nullif($4,'')::date,nullif($5,'')::time,nullif($6,'')::time,$7,$8,$9,$10) returning id",[clientId,packageRow?.id||null,draft.eventName,draft.date,draft.startTime,draft.endTime,draft.venue||null,draft.total,notes,draft.backdropColor?.slice(0,80)||null]);
     bookingId=saved.rows[0].id;
     await db.query("update public.telegram_booking_drafts set status='CONFIRMED',booking_id=$2::uuid,updated_at=now() where id=$1::uuid",[id,bookingId]);
     await db.query("insert into public.audit_logs(action,entity_type,entity_id,metadata) values('BOOKING_CREATE_TELEGRAM','bookings',$1::uuid,$2::jsonb)",[bookingId,JSON.stringify({telegramUserId:userId,chatId,draftId:id,duplicateOverride:override,packageMatched:Boolean(packageRow),statedBalance:draft.statedBalance,paymentPosted:false})]);

@@ -1,6 +1,7 @@
 export type TelegramBookingDraft = {
   clientName: string;
   phone: string;
+  email: string;
   eventName: string;
   date: string;
   startTime: string;
@@ -13,6 +14,10 @@ export type TelegramBookingDraft = {
   theme: string;
   guestCount: string;
   celebrantPhoto: string;
+  addons: string;
+  templateNumber: string;
+  backdropColor: string;
+  otherRequests: string;
 };
 
 const field = (text: string, labels: string[]) => {
@@ -52,22 +57,27 @@ const timeRange = (value: string) => {
 
 export function parseTelegramBooking(text: string): TelegramBookingDraft {
   const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
-  const packageLine = lines.find(line => /^(?!name|date|time|venue|balance|client|contact|estimated|design|celebrant)[^:]{2,60}:\s*₱?\s*[\d,]+(?:\.\d{1,2})?$/i.test(line)) || "";
+  const packageLine = lines.find(line => /^(?!name|date|time|venue|balance|client|contact|phone|mobile|email|price|total|estimated|design|celebrant|template|backdrop|add-?ons?|other)[^:]{2,60}:\s*₱?\s*[\d,]+(?:\.\d{1,2})?$/i.test(line)) || "";
   const [startTime,endTime] = timeRange(field(text,["time","event time"]));
   return {
     clientName: field(text,["client name","contact name","booked by","parent name"]),
     phone: field(text,["contact number","phone number","mobile number","phone"]),
+    email: field(text,["email","email address"]),
     eventName: field(text,["name of the event","event name"]),
     date: dateValue(field(text,["date","event date"])),
     startTime,endTime,
     venue: field(text,["venue address","venue","location"]),
     packageName: packageLine ? packageLine.split(":")[0].trim() : field(text,["package","service"]),
-    total: amount(packageLine ? packageLine.split(":").slice(1).join(":") : field(text,["total price","package price","total"])),
+    total: amount(packageLine ? packageLine.split(":").slice(1).join(":") : field(text,["total price","package price","price","total"])),
     statedBalance: amount(field(text,["balance","remaining balance"])),
     celebrant: field(text,["name of the celebrant","celebrant"]),
     theme: field(text,["design theme","theme"]),
     guestCount: field(text,["estimated guest count","guest count"]),
     celebrantPhoto: field(text,["celebrant photo"]),
+    addons: field(text,["add-ons","addons","add ons"]),
+    templateNumber: field(text,["template number","template no\\.?","template #"]),
+    backdropColor: field(text,["backdrop color","backdrop colour"]),
+    otherRequests: field(text,["other requests","special requests"]),
   };
 }
 
@@ -95,6 +105,11 @@ export function telegramDraftPreview(draft: TelegramBookingDraft) {
     draft.celebrant ? `Celebrant: ${draft.celebrant}` : "",
     draft.theme ? `Theme: ${draft.theme}` : "",
     draft.celebrantPhoto ? `Celebrant photo: ${draft.celebrantPhoto}` : "",
+    draft.addons ? `Add-ons requested: ${draft.addons}` : "",
+    draft.templateNumber ? `Template number: ${draft.templateNumber}` : "",
+    draft.backdropColor ? `Backdrop color: ${draft.backdropColor}` : "",
+    draft.otherRequests ? `Other requests: ${draft.otherRequests}` : "",
+    draft.email ? `Email: ${draft.email}` : "",
     draft.statedBalance !== null ? `Balance stated in message: ${money(draft.statedBalance)}` : "",
     implied !== null && implied >= 0 ? `Implied payment: ${money(implied)} — NOT posted to Cashflow; verify in the app.` : "",
     "No booking is saved until you tap Confirm. Send `client <name>` or `edit <field> <value>` to correct this draft.",

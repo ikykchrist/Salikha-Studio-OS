@@ -12,6 +12,8 @@ Bot: `@SalikhaBookingsBot`
 
 The bot creates or reuses an exact-name client, matches an active package by exact name, saves a Pending booking, and records the Telegram ID and draft ID in the audit log. Unmatched packages are saved as a custom service with the requested name in internal notes. Date or time may remain TBA; Google Calendar sync starts only when the schedule is complete. Changes made later in the Booking editor move the Calendar event.
 
+The complete pasted client form is stored under the booking's internal notes. The confirmed draft details are appended there too, including email, add-ons, template number, backdrop color, and other requests. Backdrop color is also copied into event preparation. Add-ons remain requests in notes until staff prices/selects them in the Booking editor.
+
 Balances quoted by a client are displayed in the preview but **no payment or cash entry is posted**. Verify the payment and record it through Cashflow.
 
 The built-in parser handles the studio form. Optional Gemini extraction requires `GEMINI_API_KEY`, `GEMINI_MODEL`, and `TELEGRAM_USE_GEMINI=true` in server environment. This sends pasted client booking text to Google for extraction; it only supplements the draft, and staff still confirm before saving. A consumer Gemini subscription alone does not provide Gemini API access. A `TELEGRAM_BOT_TOKEN` server environment variable is also supported for installations that prefer environment-based token management.

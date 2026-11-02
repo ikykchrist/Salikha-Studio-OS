@@ -30,3 +30,26 @@ test("keeps an unprovided date and time as TBA", () => {
   assert.equal(draft.endTime, "");
   assert.deepEqual(missingTelegramFields(draft), []);
 });
+
+test("reads the expanded client form fields", () => {
+  const draft = parseTelegramBooking(`Client Name: Maria Santos
+Phone Number: 09171234567
+Email: maria@example.com
+Name of the event: Birthday party
+Date: (or TBA)
+Time: (or TBA)
+Package: Classic Photobooth
+Price: 5,500
+Add-ons: Guestbook, extra hour
+Template Number: 12
+Backdrop Color: Pastel pink
+Other Requests: Include our logo`);
+  assert.equal(draft.email, "maria@example.com");
+  assert.equal(draft.total, 5500);
+  assert.equal(draft.addons, "Guestbook, extra hour");
+  assert.equal(draft.templateNumber, "12");
+  assert.equal(draft.backdropColor, "Pastel pink");
+  assert.equal(draft.otherRequests, "Include our logo");
+  assert.equal(draft.date, "");
+  assert.deepEqual(missingTelegramFields(draft), []);
+});

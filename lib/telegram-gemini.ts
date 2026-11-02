@@ -7,7 +7,7 @@ export async function extractTelegramBooking(text:string):Promise<TelegramBookin
   const key=process.env.GEMINI_API_KEY,model=process.env.GEMINI_MODEL;
   if(process.env.TELEGRAM_USE_GEMINI!=="true"||!key||!model||!/^[A-Za-z0-9._-]+$/.test(model))return base;
   try{
-    const fields=["clientName","phone","eventName","date","startTime","endTime","venue","packageName","celebrant","theme","guestCount","celebrantPhoto"];
+    const fields=["clientName","phone","email","eventName","date","startTime","endTime","venue","packageName","celebrant","theme","guestCount","celebrantPhoto","addons","templateNumber","backdropColor","otherRequests"];
     const properties=Object.fromEntries(fields.map(name=>[name,{type:"string"}]));
     const response=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,{
       method:"POST",cache:"no-store",signal:AbortSignal.timeout(10000),
