@@ -47,9 +47,8 @@ export async function POST(request: Request) {
     if (booking.status !== "DONE") { await client.query("rollback"); return Response.json({ error: "Only a completed booking can be reconciled." }, { status: 409 }); }
     if (booking.consumables_reconciled_at) { await client.query("rollback"); return Response.json({ error: "Consumable usage has already been recorded for this booking." }, { status: 409 }); }
 
-    const allowedResult = await client.query("select inventory_item_id from public.package_recipes where package_id = $1", [booking.package_id]);
-    const allowed = new Set<string>(allowedResult.rows.map((row: { inventory_item_id: string }) => row.inventory_item_id));
-    if (lines.some((line) => !allowed.has(line.inventoryItemId))) { await client.query("rollback"); return Response.json({ error: "Usage must contain only ingredients in this package recipe." }, { status: 400 }); }
+    // Actual consumption can include add-on materials and unplanned ingredients.
+    // The item-level stock and active-state checks below still prevent invalid deductions.
 
     let totalCost = 0;
     const paperLines:{itemName:string;unit:string;quantity:number;category:string}[]=[];

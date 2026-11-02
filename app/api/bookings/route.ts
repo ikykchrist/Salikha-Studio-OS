@@ -21,7 +21,7 @@ export async function POST(request:Request){
  const addonSnapshot=addonIds.map(id=>{const row=addonRows.find((item:{id:string})=>item.id===id);return {id:row.id,name:row.name,price:Number(row.price)};});
  const addonAmount=addonSnapshot.reduce((sum,item)=>sum+cents(item.price),0);
  if(b.basePrice!==undefined&&total!==basePrice+transport+addonAmount)throw Error('Booking total changed. Review the package, add-ons and transportation.');
- if(deposit>total||(total>0&&deposit<=0))throw Error('A downpayment greater than zero and no more than the booking total is required.');
+ if(deposit>total)throw Error('Downpayment cannot exceed the booking total.');
  if(deposit>0&&(!uuid(b.paymentAccountId)||!validDate(b.paymentDate)))throw Error('Choose the receiving account and actual downpayment date.');
  const account=deposit>0?(await db.query('select id,name from public.cash_accounts where id=$1 and is_active for update',[b.paymentAccountId])).rows[0]:null;
  if(deposit>0&&!account)throw Error('Choose an active receiving account.');

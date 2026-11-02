@@ -322,3 +322,13 @@
 .booking-addon-options strong { font-size:11px; white-space:nowrap; }
 .booking-addon-total { color:var(--muted); display:block; font-size:11px; font-weight:700; margin-top:10px; }
 @media(max-width:620px){.booking-addon-options{grid-template-columns:1fr;}}
+
+.closeout-extra-materials { border-top:1px solid var(--line); margin-top:18px; padding-top:18px; }
+.closeout-extra-materials h3 { font-size:14px; margin:0 0 7px; }
+.closeout-add-material { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0; }
+.closeout-add-material select { background:var(--surface); border:1px solid var(--line); border-radius:8px; color:var(--ink); flex:1 1 220px; min-height:40px; min-width:0; padding:0 10px; }
+.closeout-add-material button { min-height:40px; }
+.closeout-extra-list { gap:8px; }
+.closeout-extra-row { align-items:start; border:1px solid var(--line); border-radius:9px; display:flex; gap:9px; grid-column:1/-1; padding:10px; }
+.closeout-extra-row label { flex:1; min-width:0; }
+.closeout-extra-row .close-button { flex:none; }

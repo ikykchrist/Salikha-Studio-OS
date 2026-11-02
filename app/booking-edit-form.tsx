@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { MapPin, ShieldCheck, X } from "lucide-react";
 import { showConfirm, showNotice } from "../lib/ui-dialogs";
 
-type BookingRecord = { id: string; client: string; eventName: string; date: string; startTime: string; endTime: string; venue: string; mapsUrl?: string; packageId?: string | null; packageName: string; total: number; paidAmount?: number; downpaymentAmount?: number; status: "PENDING" | "DONE" | "CANCELLED"; preparation: { layoutReady: boolean; venueReady: boolean; backdropColor: string | null } };
+type BookingRecord = { id: string; client: string; eventName: string; date: string; startTime: string; endTime: string; venue: string; mapsUrl?: string; packageId?: string | null; packageName: string; addonIds?: string[]; total: number; paidAmount?: number; downpaymentAmount?: number; status: "PENDING" | "DONE" | "CANCELLED"; preparation: { layoutReady: boolean; venueReady: boolean; backdropColor: string | null } };
 type PackageOption = { id: string; name: string; base_price: number; duration: string | null; inclusions: string | null; is_active: boolean };
 
 export function BookingEditForm({ booking, onClose, onSave }: { booking: BookingRecord; onClose: () => void; onSave: (booking: BookingRecord) => void | Promise<void> }) {
@@ -17,6 +17,11 @@ export function BookingEditForm({ booking, onClose, onSave }: { booking: Booking
   const [packageId, setPackageId] = useState(booking.packageId || "");
   const [packages, setPackages] = useState<PackageOption[]>([]);
   const [packageLoadError, setPackageLoadError] = useState("");
+  const [addonOptions, setAddonOptions] = useState<Array<{ id: string; name: string; price: number; archived?: boolean }>>([]);
+  const [selectedAddonIds, setSelectedAddonIds] = useState<string[]>([]);
+  const [addonLoading, setAddonLoading] = useState(true);
+  const [addonError, setAddonError] = useState("");
+  const [transportAmount, setTransportAmount] = useState(0);
   const [recipeCost, setRecipeCost] = useState<number | null>(null);
   const [total, setTotal] = useState(String(booking.total));
   const [status, setStatus] = useState(booking.status);
@@ -41,6 +46,30 @@ export function BookingEditForm({ booking, onClose, onSave }: { booking: Booking
   const chosenPackage = packages.find((item) => item.id === packageId);
   const packageChanged = packageId !== (booking.packageId || "");
   useEffect(() => {
+    let cancelled = false;
+    setAddonLoading(true); setAddonError("");
+    void fetch(`/api/booking-addons?bookingId=${encodeURIComponent(booking.id)}&packageId=${encodeURIComponent(packageId)}`, { cache: "no-store" })
+      .then(async (response) => { const result = await response.json(); if (!response.ok) throw new Error(result.error || "Could not load add-ons."); return result; })
+      .then((result: { addons: Array<{id:string;name:string;price:number}>; saved: Array<{id:string;name:string;price:number}>; transportAmount:number }) => {
+        if (cancelled) return;
+        const saved = packageId === booking.packageId ? (Array.isArray(result.saved) ? result.saved : []) : [];
+        const active = result.addons.map((item) => ({ ...item, price: Number(saved.find((previous) => previous.id === item.id)?.price ?? item.price) }));
+        setAddonOptions([...active, ...saved.filter((item) => !active.some((option) => option.id === item.id)).map((item) => ({ ...item, price: Number(item.price), archived: true }))]);
+        setSelectedAddonIds(saved.map((item) => item.id));
+        setTransportAmount(Number(result.transportAmount) || 0);
+      })
+      .catch((cause: unknown) => { if (!cancelled) setAddonError(cause instanceof Error ? cause.message : "Could not load add-ons."); })
+      .finally(() => { if (!cancelled) setAddonLoading(false); });
+    return () => { cancelled = true; };
+  }, [booking.id, booking.packageId, packageId]);
+  const addonTotal = addonOptions.filter((item) => selectedAddonIds.includes(item.id)).reduce((sum, item) => sum + Number(item.price), 0);
+  const toggleAddon = (id: string, checked: boolean) => {
+    const option = addonOptions.find((item) => item.id === id);
+    if (!option) return;
+    setSelectedAddonIds((current) => checked ? [...current, id] : current.filter((item) => item !== id));
+    setTotal((current) => String(Math.max(0, (Math.round(Number(current) * 100) + (checked ? 1 : -1) * Math.round(option.price * 100)) / 100)));
+  };
+  useEffect(() => {
     if (!packageId) { setRecipeCost(null); return; }
     let cancelled = false;
     setRecipeCost(null);
@@ -53,9 +82,9 @@ export function BookingEditForm({ booking, onClose, onSave }: { booking: Booking
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault(); setError("");
     if (!eventName.trim() || !date || !Number.isFinite(Number(total)) || Number(total) < Number(booking.paidAmount || 0)) { setError("Enter an event, date, and total at least as much as payments already received."); return; }
-    if (packageLoadError || !packages.length && packageId) { setError("Packages could not be verified. Retry before saving."); return; }
+    if (packageLoadError || !packages.length && packageId || addonError || addonLoading) { setError(addonError || "Package add-ons could not be verified. Retry before saving."); return; }
     setSaving(true);
-    try { await onSave({ ...booking, eventName: eventName.trim(), date, startTime, endTime, venue: venue.trim(), mapsUrl: mapsUrl.trim(), packageId: packageId || null, packageName: chosenPackage?.name || (packageId ? booking.packageName : "Custom service"), total: Number(total), status }); }
+    try { await onSave({ ...booking, eventName: eventName.trim(), date, startTime, endTime, venue: venue.trim(), mapsUrl: mapsUrl.trim(), packageId: packageId || null, packageName: chosenPackage?.name || (packageId ? booking.packageName : "Custom service"), addonIds: selectedAddonIds, total: Number(total), status }); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Could not save booking."); }
     finally { setSaving(false); }
   };
@@ -95,7 +124,8 @@ export function BookingEditForm({ booking, onClose, onSave }: { booking: Booking
         <label>End time<input type="time" value={endTime} onChange={(event) => setEndTime(event.target.value)} /></label>
         <label className="wide-field">Venue<input value={venue} onChange={(event) => setVenue(event.target.value)} /></label>
         <label className="wide-field">Google Maps link<div className="input-with-icon"><MapPin aria-hidden="true" /><input type="url" value={mapsUrl} onChange={(event) => setMapsUrl(event.target.value)} placeholder="Paste Maps link (optional)" /></div></label>
-        <label className="wide-field">Package<select value={packageId} onChange={(event) => { const nextId = event.target.value; setPackageId(nextId); const item = packages.find((entry) => entry.id === nextId); if (item) setTotal(String(item.base_price)); }} disabled={Boolean(packageLoadError) || saving}><option value="">Custom service</option>{packages.filter((item) => item.is_active || item.id === booking.packageId).map((item) => <option key={item.id} value={item.id}>{item.name}{!item.is_active ? " (archived)" : ""} · ₱{Number(item.base_price).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</option>)}</select></label>
+        <label className="wide-field">Package<select value={packageId} onChange={(event) => { const nextId = event.target.value; setPackageId(nextId); setSelectedAddonIds([]); const item = packages.find((entry) => entry.id === nextId); setTotal(String(item ? Number(item.base_price) + transportAmount : Math.max(0, Number(total) - addonTotal))); }} disabled={Boolean(packageLoadError) || saving}><option value="">Custom service</option>{packages.filter((item) => item.is_active || item.id === booking.packageId).map((item) => <option key={item.id} value={item.id}>{item.name}{!item.is_active ? " (archived)" : ""} · ₱{Number(item.base_price).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</option>)}</select></label>
+        <fieldset className="wide-field booking-addon-field"><legend>Add-ons · select multiple</legend>{addonLoading ? <p className="workflow-help">Loading add-ons…</p> : addonError ? <p className="form-warning" role="alert">{addonError}</p> : addonOptions.length ? <div className="booking-addon-options">{addonOptions.map((item) => <label key={item.id} className={selectedAddonIds.includes(item.id) ? "is-selected" : ""}><input type="checkbox" checked={selectedAddonIds.includes(item.id)} onChange={(event) => toggleAddon(item.id, event.target.checked)} disabled={saving} /><span>{item.name}{item.archived ? " (previously selected)" : ""}</span><strong>₱{item.price.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</strong></label>)}</div> : <p className="workflow-help">No add-ons configured for this package.</p>}<small className="booking-addon-total">Add-ons total: ₱{addonTotal.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</small></fieldset>
         {packageLoadError && <p className="form-warning" role="alert">{packageLoadError}</p>}
         {chosenPackage && <div className="workflow-callout"><strong>{chosenPackage.name}</strong><small>{chosenPackage.duration || "Duration not set"} · {chosenPackage.inclusions || "No inclusions listed"}</small>{recipeCost !== null && <small>Recipe cost: ₱{recipeCost.toLocaleString("en-PH", { minimumFractionDigits: 2 })} · Estimated profit: ₱{(Number(total) - recipeCost).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</small>}{packageChanged && <small>Package changed. Review the booking total below before saving.</small>}</div>}
         <label>Total<div className="money-input"><span>₱</span><input type="number" min={booking.paidAmount || 0} step="0.01" value={total} onChange={(event) => setTotal(event.target.value)} required /></div></label>
