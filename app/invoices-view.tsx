@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, ImagePlus, LockKeyhole, Mail, Plus, Printer, Receipt, RefreshCw, Send, ShieldCheck, Trash2, X } from "lucide-react";
+import { ArrowRight, FileDown, ImageDown, ImagePlus, LockKeyhole, Mail, Plus, Receipt, RefreshCw, Send, ShieldCheck, Trash2, X } from "lucide-react";
 import { showConfirm, showNotice } from "../lib/ui-dialogs";
 import { formatManilaDate, formatManilaTime } from "../lib/manila-datetime";
+import { exportInvoicePage } from "../lib/invoice-export";
 
 type InvoiceLine = { description: string; quantity: number; unitPrice: number };
 type Booking = { id: string; client_id: string; event_name: string; event_date: string; start_time: string | null; end_time: string | null; venue: string | null; total_amount: number; downpayment_amount: number; paid_amount: number; status: string; client_name: string; client_email: string | null; package_name: string | null };
@@ -132,13 +133,22 @@ export function InvoicesView() {
 }
 
 function InvoicePreview({ invoice, logoDataUrl, emailReady, working, onSend, onVoid }: { invoice: Invoice; logoDataUrl: string | null; emailReady: boolean; working: boolean; onSend: () => void; onVoid: () => void }) {
+  const paperRef = useRef<HTMLElement>(null);
+  const [exporting, setExporting] = useState<"pdf" | "jpg" | null>(null);
+  const download = async (format: "pdf" | "jpg") => {
+    if (!paperRef.current || exporting) return;
+    setExporting(format);
+    try { await exportInvoicePage(paperRef.current, invoice.invoice_number, format); }
+    catch (cause) { await showNotice(cause instanceof Error ? cause.message : "Could not save the invoice.", "Invoice download failed"); }
+    finally { setExporting(null); }
+  };
   const lines = Array.isArray(invoice.line_items) ? invoice.line_items : [];
   const paid = invoice.booking_id ? Math.min(Number(invoice.total_amount), Number(invoice.booking_paid || 0)) : 0;
   const due = Math.max(0, Number(invoice.total_amount) - paid);
   const label = invoice.status === "SENT" && due === 0 ? "PAID" : invoice.status === "SENT" && invoice.due_date && invoice.due_date < today() ? "OVERDUE" : invoice.status;
   const event = { eventName: invoice.event_name || invoice.booking_details?.eventName, packageName: invoice.package_name || invoice.booking_details?.packageName, eventDate: invoice.event_date || invoice.booking_details?.eventDate || null, startTime: invoice.start_time || invoice.booking_details?.startTime, endTime: invoice.end_time || invoice.booking_details?.endTime, venue: invoice.venue || invoice.booking_details?.venue };
-  return <aside className="invoice-preview panel"><div className="invoice-preview-toolbar"><span className={`invoice-status ${label.toLowerCase()}`}>{label}</span><div className="invoice-actions"><button className="secondary-button" type="button" onClick={() => window.print()}><Printer aria-hidden="true" /> Print / PDF</button>{invoice.status !== "VOID" && invoice.status !== "PAID" && <button className="primary-button" type="button" onClick={onSend} disabled={working || !emailReady || !invoice.client_email}>{working ? "Sending…" : <><Send aria-hidden="true" /> Send invoice</>}</button>}</div></div>
-    <article className="invoice-paper" id="printable-invoice"><header className="invoice-paper-head"><div className="invoice-brand-lockup">{logoDataUrl ? <img className="invoice-paper-logo" src={logoDataUrl} alt="Salikha Studio logo" /> : <span className="invoice-brand-mark">S</span>}<div><strong>Salikha Studio</strong><small>Event Photo Services</small></div></div><div className="invoice-heading"><span>INVOICE</span><strong>{invoice.invoice_number}</strong></div></header>
+  return <aside className="invoice-preview panel"><div className="invoice-preview-toolbar"><span className={`invoice-status ${label.toLowerCase()}`}>{label}</span><div className="invoice-actions"><button className="secondary-button" type="button" onClick={() => void download("pdf")} disabled={Boolean(exporting)}><FileDown aria-hidden="true" /> {exporting === "pdf" ? "Saving PDF…" : "Save PDF"}</button><button className="secondary-button" type="button" onClick={() => void download("jpg")} disabled={Boolean(exporting)}><ImageDown aria-hidden="true" /> {exporting === "jpg" ? "Saving JPG…" : "Save JPG"}</button>{invoice.status !== "VOID" && invoice.status !== "PAID" && <button className="primary-button" type="button" onClick={onSend} disabled={working || !emailReady || !invoice.client_email}>{working ? "Sending…" : <><Send aria-hidden="true" /> Send invoice</>}</button>}</div></div>
+    <article className="invoice-paper" id="printable-invoice" ref={paperRef}><header className="invoice-paper-head"><div className="invoice-brand-lockup">{logoDataUrl ? <img className="invoice-paper-logo" src={logoDataUrl} alt="Salikha Studio logo" /> : <span className="invoice-brand-mark">S</span>}<div><strong>Salikha Studio</strong><small>Event Photo Services</small></div></div><div className="invoice-heading"><span>INVOICE</span><strong>{invoice.invoice_number}</strong></div></header>
       <div className="invoice-meta"><div className="invoice-bill-to"><small>Bill to</small><strong>{invoice.client_name}</strong><span>{invoice.client_email || "No client email"}</span></div><div className="invoice-meta-dates"><div><small>Invoice date</small><strong>{dateLabel(invoice.issue_date)}</strong></div><div className="invoice-due-date"><small>Due date</small><strong>{dateLabel(invoice.due_date)}</strong></div></div></div>
       <div className="invoice-event-link"><span>Event</span><strong>{event.eventName || invoice.event_name || "Event booking"}</strong><span>{event.packageName || "Package"}</span><span>{dateLabel(event.eventDate || invoice.event_date)}</span><span>{timeLabel(event.startTime)} – {timeLabel(event.endTime)}</span><span>{event.venue || "Venue not specified"}</span></div>
       <table className="invoice-items-table"><thead><tr><th>Description</th><th>Qty</th><th>Rate</th><th>Amount</th></tr></thead><tbody>{lines.map((line, index) => <tr key={`${line.description}-${index}`}><td>{line.description}</td><td>{Number(line.quantity).toLocaleString("en-PH")}</td><td>{peso(Number(line.unitPrice))}</td><td>{peso(Number(line.quantity) * Number(line.unitPrice))}</td></tr>)}</tbody></table>
