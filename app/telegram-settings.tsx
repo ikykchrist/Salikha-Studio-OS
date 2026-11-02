@@ -1,0 +1,17 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { Send } from "lucide-react";
+
+type State = { configured:boolean; webhookActive:boolean; botUsername?:string; webhookError?:string; users:Array<{id:string}>; error?:string };
+export function TelegramSettings(){
+  const [state,setState]=useState<State|null>(null);
+  const [id,setId]=useState("");
+  const [token,setToken]=useState("");
+  const [busy,setBusy]=useState(false);
+  const [message,setMessage]=useState("");
+  const refresh=async()=>{const response=await fetch("/api/telegram/setup",{cache:"no-store"});const result=await response.json();setState(result);};
+  useEffect(()=>{void refresh().catch(()=>setState({configured:false,webhookActive:false,users:[],error:"Could not load Telegram status."}));},[]);
+  const action=async(payload:object)=>{setBusy(true);setMessage("");try{const response=await fetch("/api/telegram/setup",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(payload)});const result=await response.json();if(!response.ok)throw Error(result.error||"Telegram setup failed.");setMessage("Telegram setting saved.");setId("");setToken("");await refresh();}catch(error){setMessage(error instanceof Error?error.message:"Telegram setup failed.");}finally{setBusy(false);}};
+  return <article className="settings-card telegram-settings-card"><div className="settings-card-icon"><Send aria-hidden="true" /></div><div><p className="eyebrow">Booking intake</p><h2>Telegram bot</h2><p>{state?.configured?`@${state.botUsername||"SalikhaBookingsBot"} · ${state.webhookActive?"Webhook active":"Webhook not active"}`:"Connect the @SalikhaBookingsBot token from BotFather. It is encrypted on the server."}</p>{state?.webhookError&&<small role="alert">Telegram reports: {state.webhookError}</small>}<p className="workflow-help">Staff send /id to @SalikhaBookingsBot. Approve their numeric ID here. They can then paste a booking form and confirm the preview. Payments require separate verification in Cashflow.</p><div className="telegram-settings-actions"><label>BotFather token<input type="password" autoComplete="off" value={token} onChange={event=>setToken(event.target.value)} placeholder="Paste token from BotFather" /></label><button className="secondary-button" type="button" disabled={busy||!token.trim()} onClick={()=>void action({action:"saveToken",token})}>Save bot token</button>{state?.configured&&<button className="secondary-button" type="button" disabled={busy} onClick={()=>void action({action:"activate"})}>{busy?"Working…":"Activate webhook"}</button>}</div>{state?.configured&&<><div className="telegram-settings-actions"><label>Approve Telegram user ID<input inputMode="numeric" pattern="[0-9]*" value={id} onChange={event=>setId(event.target.value)} placeholder="ID from /id" /></label><button className="secondary-button" type="button" disabled={busy||!/^\d{5,20}$/.test(id)} onClick={()=>void action({action:"approve",telegramUserId:id})}>Approve user</button></div><div className="telegram-approved-users">{state.users?.length?state.users.map(user=><span key={user.id}>{user.id}<button className="text-button" type="button" disabled={busy} onClick={()=>void action({action:"revoke",telegramUserId:user.id})}>Revoke</button></span>):<small>No approved users yet.</small>}</div></>}{message&&<p role="status">{message}</p>}{state?.error&&<p role="alert">{state.error}</p>}</div><span className={`settings-status ${state?.webhookActive?"ready":"pending"}`}>{state?.webhookActive?"Connected":"Setup needed"}</span></article>;
+}

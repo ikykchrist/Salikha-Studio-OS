@@ -21,6 +21,7 @@ import { BookingPreparationForm } from "./booking-preparation-form";
 import { MaintenanceActionForm } from "./maintenance-action-form";
 import { GoogleCalendarControls } from "./google-calendar-controls";
 import { GoogleCalendarSettings as GoogleCalendarSetupSettings } from "./google-calendar-settings";
+import { TelegramSettings } from "./telegram-settings";
 import { MoneyWorkspace, MoneyActionForm } from "./money-workspace";
 import { FinancialReports } from "./financial-reports";
 import { ClientFollowups } from "./client-followups";
@@ -604,6 +605,7 @@ function SettingsView({ user }: { user: AuthUser }) {
         <article className="settings-card"><div className="settings-card-icon"><ShieldCheck aria-hidden="true" /></div><div><p className="eyebrow">Data source</p><h2>Business data</h2><p>{healthError || "Shared business database"}</p></div><span className={"settings-status " + (databaseHealthy ? "ready" : "pending")}>{databaseHealthy ? "Healthy" : "Unreachable"}</span><button className="secondary-button" type="button" onClick={() => window.location.reload()}>Check again</button></article>
         <ProfileSettingsCard user={user} />
         <GoogleCalendarSetupSettings />
+        <TelegramSettings />
         <article className="settings-card"><div className="settings-card-icon"><Users aria-hidden="true" /></div><div><p className="eyebrow">Access</p><h2>Team accounts</h2><p>Admins can create and manage user or admin accounts.</p></div><span className="settings-status ready">{user.role}</span></article>
       </section>
       <section className="settings-summary">
