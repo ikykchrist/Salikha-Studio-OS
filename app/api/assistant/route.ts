@@ -29,9 +29,10 @@ export async function POST(request: Request) {
   try { body = JSON.parse(raw); } catch { return reply({ error: "Valid JSON is required." }, 400); }
   if (!body || typeof body !== "object" || Array.isArray(body)) return reply({ error: "Valid request object is required." }, 400);
   if (body.action === "configure") {
-    const key = typeof body.key === "string" ? body.key.trim() : "";
-    const model = typeof body.model === "string" ? body.model.trim().replace(/^models\//, "") : "";
-    if (!/^[A-Za-z0-9_-]{20,200}$/.test(key) || !modelPattern.test(model)) return reply({ error: "Enter a valid Gemini API key and model ID." }, 400);
+    const key = typeof body.key === "string" ? body.key.trim().replace(/^[`"']|[`"']$/g, "") : "";
+    const model = typeof body.model === "string" ? body.model.trim().replace(/^[`"']|[`"']$/g, "").replace(/^models\//, "") : "";
+    if (!key || key.length > 512 || /\s|[\x00-\x1f]/.test(key)) return reply({ error: "The API key field is empty or contains spaces. Copy only the key value from Google AI Studio." }, 400);
+    if (!modelPattern.test(model)) return reply({ error: "The model ID should look like gemini-3.8-flash. Enter only the model ID." }, 400);
     try {
       const test = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}`, { cache: "no-store", signal: AbortSignal.timeout(10000), headers: { "x-goog-api-key": key } });
       if (!test.ok) return reply({ error: test.status === 404 ? "That model is not available to this API key." : "Google could not verify this key and model. Check AI Studio access." }, 400);

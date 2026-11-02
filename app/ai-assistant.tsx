@@ -13,7 +13,7 @@ export function AiAssistant() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState("");
   const [key, setKey] = useState("");
-  const [model, setModel] = useState("");
+  const [model, setModel] = useState("gemini-3.8-flash");
   const [liveData, setLiveData] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -24,7 +24,7 @@ export function AiAssistant() {
     fetch("/api/assistant", { cache: "no-store" }).then(async response => {
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Could not check assistant setup.");
-      if (active) { setSetup(result); setModel(result.model || ""); }
+      if (active) { setSetup(result); setModel(result.model || "gemini-3.8-flash"); }
     }).catch(err => { if (active) setError(err instanceof Error ? err.message : "Could not check assistant setup."); });
     return () => { active = false; };
   }, []);
