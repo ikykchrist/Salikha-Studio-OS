@@ -106,6 +106,9 @@ export async function POST(request: Request) {
         await client.query("delete from public.booking_consumable_usage where booking_id = $1::uuid", [id]);
         await client.query("delete from public.calendar_events where booking_id = $1::uuid", [id]);
       }
+      // Keep the original Telegram intake for audit while removing its reference
+      // to a booking that the administrator has chosen to delete.
+      await client.query("update public.telegram_booking_drafts set booking_id = null, updated_at = now() where booking_id = $1::uuid", [id]);
     }
 
     await client.query(`delete from public."${table}" where id = $1::uuid`, [id]);
