@@ -69,7 +69,7 @@ export async function POST(request: Request) {
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: instruction }] },
         contents: messages.map(m => ({ role: m.role, parts: [{ text: m.text }] })),
-        generationConfig: { maxOutputTokens: 1200, temperature: 0.25 },
+        generationConfig: { maxOutputTokens: 1200 },
       }),
     });
     if (!upstream.ok) return reply({ error: upstream.status === 429 ? "Gemini's usage limit was reached. Try again later." : upstream.status === 400 || upstream.status === 404 ? "Check that the selected Gemini model is available to your API key." : upstream.status === 403 || upstream.status === 401 ? "Gemini rejected this API key. Check Google AI Studio access." : "Gemini is temporarily unavailable. Please retry." }, upstream.status === 429 ? 429 : 502);
