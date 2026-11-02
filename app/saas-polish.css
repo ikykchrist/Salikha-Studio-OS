@@ -162,15 +162,23 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .salikha-mascot-spark { position: absolute; top: 32%; right: 5%; width: 18px; height: 18px; border-radius: 50%; background: radial-gradient(circle, #fff 0 13%, #fff9bf 19%, #f9c65d 34%, transparent 70%); opacity: 0; transform: scale(.3); animation: mascot-flash 9s ease-out infinite; }
 .salikha-mascot--mini { width: 28px; height: 37px; margin-right: 5px; }
 .salikha-mascot--mini .salikha-mascot-spark, .salikha-mascot--avatar .salikha-mascot-spark, .salikha-mascot--empty .salikha-mascot-spark { display: none; }
-.salikha-mascot--hero { width: 156px; height: 190px; animation: mascot-wave 3.8s ease-in-out infinite; }
+.salikha-mascot--hero { width: 124px; height: 148px; animation: mascot-wave 3.8s ease-in-out infinite; }
 .salikha-mascot--avatar { width: 37px; height: 43px; }
 .salikha-mascot--thinking { animation: mascot-think 2.4s ease-in-out infinite; }
 .salikha-mascot--empty { width: 102px; height: 124px; margin-bottom: 8px; }
-.salikha-mascot--closeout { display: block; width: 116px; height: 140px; margin: -18px auto -3px; animation: mascot-celebrate .85s ease-in-out infinite alternate; }
+.salikha-mascot--closeout { display: block; width: 82px; height: 100px; margin: -8px auto -3px; animation: mascot-celebrate .85s ease-in-out infinite alternate; }
 .salikha-mascot--closeout .salikha-mascot-spark { animation: mascot-party-spark 1.7s ease-out infinite; }
-.mascot-overview-heading { min-height: 171px; }
-.mascot-overview-actions { display: flex; align-items: center; gap: 16px; align-self: center; }
-.mascot-overview-actions .primary-button { white-space: nowrap; }
+.sidebar-mascot { display: flex; align-items: center; gap: 9px; margin: 0 3px 11px; padding: 8px 10px; border: 1px solid #333b48; border-radius: 12px; background: rgb(255 255 255 / 4%); }
+.sidebar-mascot .salikha-mascot { width: 32px; height: 39px; }
+.sidebar-mascot span { display: grid; min-width: 0; line-height: 1.3; }
+.sidebar-mascot strong { color: #f2f4f8; font-size: 11px; font-weight: 700; }
+.sidebar-mascot small { color: #9ca9ba; font-size: 10px; }
+.mascot-welcome-card { position: relative; display: flex; align-items: center; min-height: 124px; margin: -1px 0 18px; padding: 20px 150px 20px 26px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--accent) 14%, var(--line)); border-radius: 16px; background: linear-gradient(110deg, var(--surface) 0%, var(--surface) 50%, var(--soft-accent) 100%); box-shadow: var(--saas-shadow); }
+.mascot-welcome-copy { position: relative; z-index: 1; }
+.mascot-welcome-copy .eyebrow { margin-bottom: 5px; }
+.mascot-welcome-copy h2 { margin: 0; color: var(--ink); font-size: clamp(17px, 1.5vw, 21px); font-weight: 730; letter-spacing: -.035em; line-height: 1.25; }
+.mascot-welcome-copy p:last-child { margin: 5px 0 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
+.mascot-welcome-card > .salikha-mascot { position: absolute; right: 30px; bottom: -18px; transform-origin: center bottom; }
 .assistant-avatar { overflow: hidden; padding: 0; }
 .assistant-avatar .salikha-mascot { margin-top: 3px; }
 .assistant-empty > .salikha-mascot { display: block; margin-inline: auto; }
@@ -184,16 +192,16 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 @keyframes mascot-flash { 0%,69%,76%,100% { opacity: 0; transform: scale(.3); } 71% { opacity: .95; transform: scale(2.1); } }
 @keyframes mascot-party-spark { 0%,30%,100% { opacity: 0; transform: scale(.2); } 48% { opacity: 1; transform: scale(2.4); } 65% { opacity: 0; transform: scale(3.2); } }
 @media (max-width: 620px) {
-  .salikha-mascot--hero { width: 100px; height: 125px; }
-  .mascot-overview-heading { min-height: 0; align-items: center; }
-  .mascot-overview-actions { gap: 7px; }
-  .mascot-overview-actions .primary-button { min-height: 42px; padding-inline: 12px; font-size: 12px; }
-  .salikha-mascot--mini { width: 23px; height: 30px; margin-right: 1px; }
+  .mascot-welcome-card { min-height: 116px; margin-top: -3px; padding: 17px 98px 17px 16px; }
+  .mascot-welcome-card > .salikha-mascot { width: 80px; height: 99px; right: 9px; bottom: -9px; }
+  .mascot-welcome-copy h2 { font-size: 16px; }
+  .mascot-welcome-copy p:last-child { font-size: 11px; }
+  .sidebar-mascot { margin-bottom: 8px; }
 }
 @media (max-width: 390px) {
-  .mascot-overview-heading { flex-wrap: wrap; }
-  .mascot-overview-actions { width: 100%; justify-content: space-between; }
-  .salikha-mascot--hero { width: 72px; height: 88px; }
+  .mascot-welcome-card { padding-right: 82px; }
+  .mascot-welcome-card > .salikha-mascot { width: 67px; height: 84px; right: 4px; }
+  .mascot-welcome-copy h2 { font-size: 15px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .salikha-mascot, .salikha-mascot-frame, .salikha-mascot-spark { animation: none !important; transform: none !important; }

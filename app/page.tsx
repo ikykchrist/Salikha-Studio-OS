@@ -193,6 +193,7 @@ export default function Home() {
         </nav>
 
         <div className="sidebar-bottom">
+          <div className="sidebar-mascot"><Mascot mood="welcome" size="avatar" /><span><strong>Studio sidekick</strong><small>Ready for the next event</small></span></div>
           {authUser.role === "ADMIN" && <button className={`nav-item ${activeView === "Assistant" ? "active" : ""}`} type="button" onClick={() => { setActiveView("Assistant"); setSidebarOpen(false); }}><Sparkles className="nav-icon" aria-hidden="true" /><span>AI assistant</span></button>}
           <button className={`nav-item ${activeView === "Settings" ? "active" : ""}`} type="button" onClick={() => { setActiveView("Settings"); setSidebarOpen(false); }}><Settings className="nav-icon" aria-hidden="true" /><span>Settings</span></button>
           <div className="user-chip">
@@ -206,7 +207,7 @@ export default function Home() {
       {sidebarOpen && <button className="sidebar-overlay" type="button" onClick={() => setSidebarOpen(false)} aria-label="Close navigation" />}
       <main className="main-content">
         <header className="topbar">
-          <div className="topbar-left"><button className="sidebar-toggle" type="button" onClick={() => setSidebarOpen((open) => !open)} aria-label={sidebarOpen ? "Close navigation" : "Open navigation"}><Menu aria-hidden="true" /></button><Mascot mood="welcome" /><div className="breadcrumb"><span>Workspace</span><b>/</b><strong>{activeView}</strong></div></div>
+          <div className="topbar-left"><button className="sidebar-toggle" type="button" onClick={() => setSidebarOpen((open) => !open)} aria-label={sidebarOpen ? "Close navigation" : "Open navigation"}><Menu aria-hidden="true" /></button><div className="breadcrumb"><span>Workspace</span><b>/</b><strong>{activeView}</strong></div></div>
           <div className="topbar-actions">
             <span className="system-status"><i /> System ready</span>
             <button className="icon-button" type="button" aria-label="Toggle dark mode" title={darkMode ? "Switch to light mode" : "Switch to dark mode"} onClick={toggleTheme}>{darkMode ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}</button>
@@ -217,13 +218,18 @@ export default function Home() {
 
         <div className="page-content" key={activeView}>
            {activeView === "Assistant" && authUser.role === "ADMIN" ? <AiAssistant /> : activeView === "Team" && authUser.role === "ADMIN" ? <TeamView currentUser={authUser} /> : activeView === "Invoices" && authUser.role === "ADMIN" ? <InvoicesView /> : activeView === "Bookings" ? <BookingsView isAdmin={authUser.role === "ADMIN"} showForm={showBookingForm} onShowForm={setShowBookingForm} onNavigate={setActiveView} /> : activeView === "Clients" ? <ClientsView /> : activeView === "Calendar" ? <CalendarView /> : activeView === "Cashflow" ? <MoneyWorkspace key="cash" /> : activeView === "Inventory" ? <InventoryView onNavigate={setActiveView} isAdmin={authUser.role === "ADMIN"} /> : activeView === "Equipment" ? <EquipmentView /> : activeView === "Packages" ? <PackagesView onNavigate={setActiveView} onCreateBooking={() => { setActiveView("Bookings"); setShowBookingForm(true); }} /> : activeView === "Reports" ? <FinancialReports /> : activeView === "Settings" ? <SettingsView user={authUser} /> : <>
-          <section className="page-heading mascot-overview-heading">
+          <section className="page-heading">
             <div>
               <p className="eyebrow">{todayLabel}</p>
               <h1>{greeting}, Studio.</h1>
               <p className="subheading">Here is the operational pulse of your business.</p>
             </div>
-            <div className="mascot-overview-actions"><Mascot mood="welcome" size="hero" expressive /><button className="primary-button" type="button" onClick={() => { setActiveView("Bookings"); setShowBookingForm(true); }}><Plus aria-hidden="true" /> New booking</button></div>
+            <button className="primary-button" type="button" onClick={() => { setActiveView("Bookings"); setShowBookingForm(true); }}><Plus aria-hidden="true" /> New booking</button>
+          </section>
+
+          <section className="mascot-welcome-card" aria-label="Studio welcome">
+            <div className="mascot-welcome-copy"><p className="eyebrow">Your studio sidekick</p><h2>Let’s make the next event memorable.</h2><p>Keep the details moving. I’m cheering for your team.</p></div>
+            <Mascot mood="welcome" size="hero" expressive />
           </section>
 
           <section className="metric-grid" aria-label="Business metrics">
