@@ -102,6 +102,7 @@ create table public.bookings (
   actual_transport_cost numeric(12,2) not null default 0 check (actual_transport_cost >= 0),
   operator_salary numeric(12,2) not null default 0 check (operator_salary >= 0),
   addons_amount numeric(12,2) not null default 0 check (addons_amount >= 0),
+  addons_snapshot jsonb not null default '[]'::jsonb,
   discount_amount numeric(12,2) not null default 0 check (discount_amount >= 0),
   downpayment_amount numeric(12,2) not null default 0 check (downpayment_amount >= 0),
   total_amount numeric(12,2) not null default 0 check (total_amount >= 0),

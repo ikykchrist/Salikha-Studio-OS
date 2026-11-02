@@ -311,3 +311,14 @@
 
 .booking-section-nav button span {display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 5px;border-radius:10px;background:var(--soft-accent);color:var(--accent);font-size:11px;font-weight:700;}
 @media(max-width:620px){.booking-section-nav button{font-size:12px;gap:6px;white-space:normal;line-height:1.25;}}
+
+.booking-addon-field { border:0; margin:0; min-width:0; padding:0; }
+.booking-addon-field legend { color:var(--ink); font-size:11px; font-weight:700; margin-bottom:9px; }
+.booking-addon-options { display:grid; gap:8px; grid-template-columns:repeat(2,minmax(0,1fr)); }
+.form-grid .booking-addon-options label { align-items:center; background:var(--surface); border:1px solid var(--line); border-radius:9px; color:var(--ink); cursor:pointer; display:flex; font-size:12px; gap:9px; min-width:0; padding:11px 12px; }
+.booking-addon-options label.is-selected { background:var(--soft-accent); border-color:var(--accent); box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 12%,transparent); }
+.form-grid .booking-addon-options input[type="checkbox"] { accent-color:var(--accent); flex:none; height:16px; margin:0; width:16px; }
+.booking-addon-options span { flex:1; min-width:0; }
+.booking-addon-options strong { font-size:11px; white-space:nowrap; }
+.booking-addon-total { color:var(--muted); display:block; font-size:11px; font-weight:700; margin-top:10px; }
+@media(max-width:620px){.booking-addon-options{grid-template-columns:1fr;}}

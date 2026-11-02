@@ -32,13 +32,25 @@ export async function POST(request: Request) {
   const client = await getLocalPostgresPool().connect();
   try {
     await client.query("begin");
-    const booking = await client.query(`select b.id,b.client_id,b.event_name,b.event_date,b.start_time,b.end_time,b.venue,b.total_amount,b.paid_amount,b.discount_amount,c.display_name as client_name,c.email as client_email,p.name as package_name from public.bookings b join public.clients c on c.id=b.client_id left join public.service_packages p on p.id=b.package_id where b.id=$1::uuid and b.status in ('PENDING','CONFIRMED') for update of b`, [body.bookingId]);
+    const booking = await client.query(`select b.id,b.client_id,b.event_name,b.event_date,b.start_time,b.end_time,b.venue,b.total_amount,b.paid_amount,b.discount_amount,b.transport_amount,b.addons_amount,to_jsonb(b)->'addons_snapshot' as addons_snapshot,c.display_name as client_name,c.email as client_email,p.name as package_name from public.bookings b join public.clients c on c.id=b.client_id left join public.service_packages p on p.id=b.package_id where b.id=$1::uuid and b.status in ('PENDING','CONFIRMED') for update of b`, [body.bookingId]);
     if (!booking.rowCount) { await client.query("rollback"); return Response.json({ error: "That booking is no longer active. Refresh and choose an active booking." }, { status: 409 }); }
     const event = booking.rows[0];
     const duplicate = await client.query("select invoice_number from public.invoices where booking_id=$1::uuid and status <> 'VOID' limit 1", [body.bookingId]);
     if (duplicate.rowCount) { await client.query("rollback"); return Response.json({ error: `This booking already has invoice ${duplicate.rows[0].invoice_number}. Void that invoice before generating another.` }, { status: 409 }); }
     const total = Math.max(0, Number(event.total_amount || 0));
-    const lineItems = [{ description: `${event.package_name || "Event photo service"} · ${event.event_name}`, quantity: 1, unitPrice: total }];
+    const addons = Array.isArray(event.addons_snapshot) ? event.addons_snapshot as Array<{ name: string; price: number }> : [];
+    const addonAmount = Math.max(0, Number(event.addons_amount || 0));
+    const transportAmount = Math.max(0, Number(event.transport_amount || 0));
+    const baseAmount = Math.round((total - addonAmount - transportAmount) * 100) / 100;
+    const detailedLines = baseAmount >= 0 ? [
+      { description: `${event.package_name || "Event photo service"} · ${event.event_name}`, quantity: 1, unitPrice: baseAmount },
+      ...addons.map((addon) => ({ description: `Add-on: ${addon.name}`, quantity: 1, unitPrice: Number(addon.price) })),
+      ...(addonAmount > 0 && !addons.length ? [{ description: "Add-ons", quantity: 1, unitPrice: addonAmount }] : []),
+      ...(transportAmount > 0 ? [{ description: "Transportation", quantity: 1, unitPrice: transportAmount }] : []),
+    ] : [];
+    const lineItems = Math.round(detailedLines.reduce((sum, line) => sum + line.unitPrice, 0) * 100) === Math.round(total * 100)
+      ? detailedLines
+      : [{ description: `${event.package_name || "Event photo service"} · ${event.event_name}`, quantity: 1, unitPrice: total }];
     const bookingDetails = { eventName: event.event_name, packageName: event.package_name, eventDate: event.event_date, startTime: event.start_time, endTime: event.end_time, venue: event.venue };
     const created = await client.query(`insert into public.invoices(client_id,booking_id,due_date,status,line_items,booking_details,subtotal,total_amount,terms,created_by) values($1::uuid,$2::uuid,$3::date,'DRAFT',$4::jsonb,$5::jsonb,$6::numeric,$6::numeric,$7,$8::uuid) returning *`, [event.client_id, event.id, body.dueDate, JSON.stringify(lineItems), JSON.stringify(bookingDetails), total, terms, auth.user!.id]);
     await client.query("commit");
