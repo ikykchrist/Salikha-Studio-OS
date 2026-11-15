@@ -7,6 +7,7 @@ import { formatManilaDate, formatManilaTime } from "../lib/manila-datetime";
 import { exportInvoicePage } from "../lib/invoice-export";
 
 type InvoiceLine = { description: string; quantity: number; unitPrice: number };
+type BrandingField = "logoDataUrl" | "paymentQrDataUrl";
 type Booking = { id: string; client_id: string; event_name: string; event_date: string | null; start_time: string | null; end_time: string | null; venue: string | null; total_amount: number; downpayment_amount: number; paid_amount: number; status: string; client_name: string; client_email: string | null; package_name: string | null };
 type BookingDetails = { eventName?: string | null; packageName?: string | null; eventDate?: string | null; startTime?: string | null; endTime?: string | null; venue?: string | null };
 type Invoice = { id: string; invoice_number: string; client_id: string; booking_id: string | null; issue_date: string; due_date: string | null; status: "DRAFT" | "SENT" | "PAID" | "VOID"; line_items: InvoiceLine[]; booking_details: BookingDetails; subtotal: number; discount_amount: number; tax_rate: number; tax_amount: number; total_amount: number; notes: string | null; terms: string | null; email_sent_to: string | null; sent_at: string | null; client_name: string; client_email: string | null; event_name: string | null; event_date: string | null; start_time: string | null; end_time: string | null; venue: string | null; package_name: string | null; booking_paid: number | null };
@@ -20,6 +21,7 @@ export function InvoicesView() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
+  const [paymentQrDataUrl, setPaymentQrDataUrl] = useState<string | null>(null);
   const [emailReady, setEmailReady] = useState(false);
   const [emailSender, setEmailSender] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -28,12 +30,13 @@ export function InvoicesView() {
   const [loadError, setLoadError] = useState("");
   const [workingId, setWorkingId] = useState("");
   const [search, setSearch] = useState("");
-  const [logoBusy, setLogoBusy] = useState(false);
+  const [brandingBusy, setBrandingBusy] = useState<BrandingField | null>(null);
   const [deleteVoidsOpen, setDeleteVoidsOpen] = useState(false);
   const [adminPassword, setAdminPassword] = useState("");
   const [maintenanceError, setMaintenanceError] = useState("");
   const [maintenanceBusy, setMaintenanceBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const qrFileRef = useRef<HTMLInputElement>(null);
 
   const reload = async () => {
     setLoadError("");
@@ -44,6 +47,7 @@ export function InvoicesView() {
       setInvoices(result.invoices as Invoice[]);
       setBookings(result.bookings as Booking[]);
       setLogoDataUrl(result.logoDataUrl ?? null);
+      setPaymentQrDataUrl(result.paymentQrDataUrl ?? null);
       setEmailReady(Boolean(result.emailReady));
       setEmailSender(result.emailSender ?? null);
     } catch (error) { setLoadError(error instanceof Error ? error.message : "Invoices could not be loaded."); }
@@ -64,23 +68,34 @@ export function InvoicesView() {
   const outstanding = invoices.filter((invoice) => invoice.status === "SENT").reduce((sum, invoice) => sum + Math.max(0, Number(invoice.total_amount) - Number(invoice.booking_paid || 0)), 0);
   const statusOf = (invoice: Invoice) => invoice.status === "SENT" && invoice.booking_id && Number(invoice.booking_paid || 0) >= Number(invoice.total_amount) ? "PAID" : invoice.status === "SENT" && invoice.due_date && invoice.due_date < today() ? "OVERDUE" : invoice.status;
   const voidCount = invoices.filter((invoice) => invoice.status === "VOID").length;
-  const saveLogo = async (logo: string | null) => {
-    setLogoBusy(true);
+  const saveBranding = async (field: BrandingField, image: string | null) => {
+    setBrandingBusy(field);
+    const isQr = field === "paymentQrDataUrl";
+    const name = isQr ? "Payment QR" : "Invoice logo";
     try {
-      const response = await fetch("/api/invoices/branding", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ logoDataUrl: logo }) });
+      const response = await fetch("/api/invoices/branding", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ [field]: image }) });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error || "Logo could not be saved.");
-      setLogoDataUrl(result.logoDataUrl);
-      await showNotice(logo ? "This logo is now saved in the studio database and will be used on invoices." : "The saved invoice logo has been removed.", logo ? "Invoice logo saved" : "Logo removed");
-    } catch (error) { await showNotice(error instanceof Error ? error.message : "Logo could not be saved.", "Branding not saved"); }
-    finally { setLogoBusy(false); if (fileRef.current) fileRef.current.value = ""; }
+      if (!response.ok) throw new Error(result.error || `${name} could not be saved.`);
+      (isQr ? setPaymentQrDataUrl : setLogoDataUrl)(result[field]);
+      await showNotice(image && isQr ? "The QR Ph code will appear on invoices with a balance due." : `${name} ${image ? "saved" : "removed"}.`, `${name} ${image ? "saved" : "removed"}`);
+    } catch (error) { await showNotice(error instanceof Error ? error.message : `${name} could not be saved.`, "Branding not saved"); }
+    finally { setBrandingBusy(null); }
   };
-  const uploadLogo = async (file?: File) => {
+  const uploadBranding = async (field: BrandingField, input: HTMLInputElement) => {
+    const file = input.files?.[0];
+    input.value = "";
     if (!file) return;
-    if (file.type !== "image/png" || file.size > 1024 * 1024) { await showNotice("Choose a PNG logo no larger than 1 MB.", "Unsupported logo"); return; }
+    if (file.type !== "image/png" || file.size > 1024 * 1024) { await showNotice("Choose a PNG image no larger than 1 MB.", "Unsupported image"); return; }
     const reader = new FileReader();
-    reader.onload = () => { if (typeof reader.result === "string") void saveLogo(reader.result); };
-    reader.onerror = () => void showNotice("The selected PNG could not be read.", "Logo upload failed");
+    reader.onload = async () => {
+      if (typeof reader.result !== "string") return;
+      const image = new Image();
+      image.src = reader.result;
+      try { await image.decode(); }
+      catch { await showNotice("The selected PNG could not be opened.", "Image upload failed"); return; }
+      await saveBranding(field, reader.result);
+    };
+    reader.onerror = () => void showNotice("The selected PNG could not be read.", "Image upload failed");
     reader.readAsDataURL(file);
   };
 
@@ -118,21 +133,22 @@ export function InvoicesView() {
 
   return <>
     <section className="page-heading"><div><p className="eyebrow">Finance / Receivables</p><h1>Invoices</h1><p className="subheading">Generate accurate invoices directly from bookings, then send or print them.</p></div><button className="primary-button" type="button" onClick={() => setFormOpen(true)} disabled={!bookings.length}><Plus aria-hidden="true" /> New invoice</button></section>
-    <section className="invoice-branding panel"><div className="invoice-branding-copy"><span className="eyebrow">Invoice branding</span><strong>{logoDataUrl ? "Your saved logo is active" : "Use your studio logo on every invoice"}</strong><small>PNG · Maximum 1 MB · stored in the studio database</small></div>{logoDataUrl && <img className="invoice-branding-preview" src={logoDataUrl} alt="Saved invoice logo preview" />}{logoDataUrl && <button className="secondary-button" type="button" disabled={logoBusy} onClick={() => void saveLogo(null)}><Trash2 aria-hidden="true" /> Remove</button>}<input ref={fileRef} type="file" accept="image/png,.png" hidden onChange={(event) => void uploadLogo(event.target.files?.[0])} /><button className="secondary-button" type="button" disabled={logoBusy} onClick={() => fileRef.current?.click()}><ImagePlus aria-hidden="true" />{logoBusy ? "Saving…" : logoDataUrl ? "Change logo" : "Upload PNG logo"}</button></section>
+    <section className="invoice-branding panel"><div className="invoice-branding-copy"><span className="eyebrow">Invoice branding</span><strong>{logoDataUrl ? "Your saved logo is active" : "Use your studio logo on every invoice"}</strong><small>PNG · Maximum 1 MB</small></div>{logoDataUrl && <img className="invoice-branding-preview" src={logoDataUrl} alt="Saved invoice logo preview" />}{logoDataUrl && <button className="secondary-button" type="button" disabled={Boolean(brandingBusy)} onClick={() => void saveBranding("logoDataUrl", null)}><Trash2 aria-hidden="true" /> Remove logo</button>}<input ref={fileRef} type="file" aria-label="Invoice logo" accept="image/png,.png" hidden onChange={(event) => void uploadBranding("logoDataUrl", event.currentTarget)} /><button className="secondary-button" type="button" disabled={Boolean(brandingBusy)} onClick={() => fileRef.current?.click()}><ImagePlus aria-hidden="true" />{brandingBusy === "logoDataUrl" ? "Saving…" : logoDataUrl ? "Change logo" : "Upload PNG logo"}</button></section>
+    <section className="invoice-branding panel" aria-label="Invoice payment QR"><div className="invoice-branding-copy"><strong>QR Ph payment</strong><small>Upload a reusable QR Ph from your bank or e-wallet. PNG · Maximum 1 MB.</small></div>{paymentQrDataUrl && <img className="invoice-branding-preview" src={paymentQrDataUrl} alt="Saved QR Ph payment code" />}{paymentQrDataUrl && <button className="secondary-button" type="button" disabled={Boolean(brandingBusy)} onClick={() => void saveBranding("paymentQrDataUrl", null)}><Trash2 aria-hidden="true" /> Remove QR</button>}<input ref={qrFileRef} type="file" aria-label="QR Ph payment code" accept="image/png,.png" hidden onChange={(event) => void uploadBranding("paymentQrDataUrl", event.currentTarget)} /><button className="secondary-button" type="button" disabled={Boolean(brandingBusy)} onClick={() => qrFileRef.current?.click()}><ImagePlus aria-hidden="true" />{brandingBusy === "paymentQrDataUrl" ? "Saving…" : paymentQrDataUrl ? "Change QR Ph" : "Upload QR Ph"}</button></section>
     <section className="invoice-maintenance panel"><div><p className="eyebrow">Invoice maintenance</p><strong>Keep invoices aligned with booking records</strong><small>Refreshing changes event details only. Financial values stay as issued.</small></div><div className="invoice-maintenance-actions"><button className="secondary-button" type="button" onClick={() => void refreshBookingDetails()} disabled={maintenanceBusy}><RefreshCw aria-hidden="true" /> Refresh invoice details</button><button className="secondary-button danger-button" type="button" onClick={() => { setAdminPassword(""); setMaintenanceError(""); setDeleteVoidsOpen(true); }} disabled={maintenanceBusy || voidCount === 0}><Trash2 aria-hidden="true" /> Delete void invoices ({voidCount})</button></div></section>
     <section className="invoice-metrics"><article className="metric-card"><span>Total invoices</span><strong>{invoices.length}</strong><small>Saved in this workspace</small></article><article className="metric-card"><span>Drafts</span><strong>{invoices.filter((invoice) => invoice.status === "DRAFT").length}</strong><small>Ready for review</small></article><article className="metric-card"><span>Sent and outstanding</span><strong>{peso(outstanding)}</strong><small>Linked booking payments reflected</small></article><article className="metric-card"><span>Overdue</span><strong>{invoices.filter((invoice) => statusOf(invoice) === "OVERDUE").length}</strong><small>Past the due date</small></article></section>
     <div className="invoice-email-setup"><Mail aria-hidden="true" /><span><strong>{emailReady ? `Sending from ${emailSender}` : "Connect the studio email to send invoices."}</strong> {emailReady ? "Invoices go directly through the connected Gmail account." : "Use salikhaprintco@gmail.com and approve Gmail send-only access."}</span>{!emailReady && <a className="secondary-button" href="/api/invoices/email/connect">Connect Gmail</a>}</div>
     {loadError && <p className="form-warning" role="alert">{loadError}</p>}
     <section className="invoice-workspace"><div className="invoice-register panel"><div className="panel-heading"><div><p className="eyebrow">Invoice register</p><h2>All invoices</h2></div><span className="muted-label">{visible.length} records</span></div><label className="invoice-search"><span className="sr-only">Search invoices</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search invoice, client, or event" /></label>
       {loading ? <div className="invoice-empty">Loading invoices…</div> : visible.length === 0 ? <div className="invoice-empty"><span className="empty-mark"><Receipt aria-hidden="true" /></span><h3>{invoices.length ? "No invoices match" : bookings.length ? "No invoices yet" : "No uninvoiced active bookings"}</h3><p>{invoices.length ? "Try another invoice number, client, or event." : bookings.length ? "Select a pending or confirmed booking to create its invoice. Booking details and price are filled automatically." : "All pending/confirmed bookings already have an invoice, or there are no active bookings yet."}</p>{bookings.length > 0 && <button className="secondary-button" type="button" onClick={() => setFormOpen(true)}><Plus aria-hidden="true" /> Create from booking</button>}</div> : <div className="invoice-list">{visible.map((invoice) => <button key={invoice.id} type="button" className={`invoice-row ${selectedId === invoice.id ? "selected" : ""}`} onClick={() => setSelectedId(invoice.id)}><span><strong>{invoice.invoice_number}</strong><small>{invoice.client_name}</small></span><span><strong>{peso(Number(invoice.total_amount))}</strong><small>{invoice.event_name || "Linked booking"}</small></span><span className={`invoice-status ${statusOf(invoice).toLowerCase()}`}>{statusOf(invoice)}</span><span className="invoice-row-date">{dateLabel(invoice.issue_date)}</span></button>)}</div>}</div>
-      {selected ? <InvoicePreview invoice={selected} logoDataUrl={logoDataUrl} emailReady={emailReady} working={workingId === selected.id} onSend={() => void send(selected)} onVoid={() => void voidInvoice(selected)} /> : <aside className="invoice-preview panel invoice-preview-empty"><span className="invoice-paper-icon"><Receipt aria-hidden="true" /></span><h2>Select an invoice</h2><p>Choose a row to review, send by email, or print.</p></aside>}
+      {selected ? <InvoicePreview invoice={selected} logoDataUrl={logoDataUrl} paymentQrDataUrl={paymentQrDataUrl} emailReady={emailReady} working={workingId === selected.id} onSend={() => void send(selected)} onVoid={() => void voidInvoice(selected)} /> : <aside className="invoice-preview panel invoice-preview-empty"><span className="invoice-paper-icon"><Receipt aria-hidden="true" /></span><h2>Select an invoice</h2><p>Choose a row to review, send by email, or print.</p></aside>}
     </section>
     {formOpen && <InvoiceForm bookings={bookings} onClose={() => setFormOpen(false)} onSave={async (payload) => { const response = await fetch("/api/invoices", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) }); const result = await response.json(); if (!response.ok) throw new Error(result.error || "Invoice could not be generated."); setFormOpen(false); await reload(); setSelectedId(result.invoice.id); await showNotice(`${result.invoice.invoice_number} was generated from the booking.`, "Invoice created"); }} />}
     {deleteVoidsOpen && <div className="invoice-maintenance-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !maintenanceBusy) setDeleteVoidsOpen(false); }}><section className="invoice-maintenance-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-void-invoices-title"><div className="admin-override-icon"><LockKeyhole aria-hidden="true" /></div><p className="eyebrow">Administrator authorization</p><h2 id="delete-void-invoices-title">Delete {voidCount} void invoice{voidCount === 1 ? "" : "s"}?</h2><p>This permanently removes only invoices marked VOID. Active, sent, and paid invoices will remain unchanged.</p><label>Admin password<input autoFocus type="password" autoComplete="current-password" value={adminPassword} onChange={(event) => { setAdminPassword(event.target.value); setMaintenanceError(""); }} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void deleteVoidedInvoices(); } }} aria-invalid={Boolean(maintenanceError)} /></label>{maintenanceError && <p className="form-warning" role="alert">{maintenanceError}</p>}<div className="admin-override-actions"><button className="secondary-button" type="button" onClick={() => setDeleteVoidsOpen(false)} disabled={maintenanceBusy}>Cancel</button><button className="app-dialog-danger-button" type="button" onClick={() => void deleteVoidedInvoices()} disabled={maintenanceBusy || !adminPassword}>{maintenanceBusy ? "Verifying…" : "Verify & delete void invoices"}</button></div></section></div>}
   </>;
 }
 
-function InvoicePreview({ invoice, logoDataUrl, emailReady, working, onSend, onVoid }: { invoice: Invoice; logoDataUrl: string | null; emailReady: boolean; working: boolean; onSend: () => void; onVoid: () => void }) {
+function InvoicePreview({ invoice, logoDataUrl, paymentQrDataUrl, emailReady, working, onSend, onVoid }: { invoice: Invoice; logoDataUrl: string | null; paymentQrDataUrl: string | null; emailReady: boolean; working: boolean; onSend: () => void; onVoid: () => void }) {
   const paperRef = useRef<HTMLElement>(null);
   const [exporting, setExporting] = useState<"pdf" | "jpg" | null>(null);
   const download = async (format: "pdf" | "jpg") => {
@@ -145,6 +161,7 @@ function InvoicePreview({ invoice, logoDataUrl, emailReady, working, onSend, onV
   const lines = Array.isArray(invoice.line_items) ? invoice.line_items : [];
   const paid = invoice.booking_id ? Math.min(Number(invoice.total_amount), Number(invoice.booking_paid || 0)) : 0;
   const due = Math.max(0, Number(invoice.total_amount) - paid);
+  const paymentQr = due > 0 && invoice.status !== "VOID" && invoice.status !== "PAID" ? paymentQrDataUrl : null;
   const label = invoice.status === "SENT" && due === 0 ? "PAID" : invoice.status === "SENT" && invoice.due_date && invoice.due_date < today() ? "OVERDUE" : invoice.status;
   const event = { eventName: invoice.event_name || invoice.booking_details?.eventName, packageName: invoice.package_name || invoice.booking_details?.packageName, eventDate: invoice.event_date || invoice.booking_details?.eventDate || null, startTime: invoice.start_time || invoice.booking_details?.startTime, endTime: invoice.end_time || invoice.booking_details?.endTime, venue: invoice.venue || invoice.booking_details?.venue };
   const eventTime = event.startTime && event.endTime ? `${timeLabel(event.startTime)} – ${timeLabel(event.endTime)}` : "TBA";
@@ -192,7 +209,11 @@ function InvoicePreview({ invoice, logoDataUrl, emailReady, working, onSend, onV
           {paid > 0 && <div><dt>Paid to date</dt><dd>−{peso(paid)}</dd></div>}
           <div className={`invoice-balance${invoice.status === "VOID" ? " invoice-balance-void" : ""}`}><dt>{invoice.status === "VOID" ? "Voided balance" : "Balance due"}</dt><dd>{peso(due)}</dd></div>
         </dl>
-        {invoice.terms && <div className="invoice-footnotes"><strong>Payment terms</strong><p>{invoice.terms}</p></div>}
+        {(invoice.terms || paymentQr) && <div className="invoice-footnotes">
+          <strong>Payment terms</strong>
+          {invoice.terms && <p>{invoice.terms}</p>}
+          {paymentQr && <figure className="invoice-payment-qr"><img src={paymentQr} alt="Scan to pay via QR Ph" /><figcaption>Scan to pay via QR Ph. Enter the balance due and check the recipient before paying.</figcaption></figure>}
+        </div>}
       </section>
       <footer className="invoice-thanks" data-invoice-break>Thank you for choosing Salikha Studio.</footer>
     </article>

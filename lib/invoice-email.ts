@@ -38,7 +38,7 @@ export async function invoiceEmailAccessToken() {
 }
 
 const cleanHeader = (value: string) => value.replace(/[\r\n]/g, " ").trim();
-export function gmailRawInvoice(from: string, to: string, subject: string, html: string, logo?: string | null) {
+export function gmailRawInvoice(from: string, to: string, subject: string, html: string, logo?: string | null, paymentQr?: string | null) {
   const boundary = `salikha_${crypto.randomUUID().replaceAll("-", "")}`;
   const safeFrom = cleanHeader(from);
   const safeTo = cleanHeader(to);
@@ -46,5 +46,6 @@ export function gmailRawInvoice(from: string, to: string, subject: string, html:
   const headers = [`From: Salikha Studio <${safeFrom}>`, `To: <${safeTo}>`, `Subject: ${encodedSubject}`, "MIME-Version: 1.0", `Content-Type: multipart/related; boundary="${boundary}"`];
   const parts = [`--${boundary}`, "Content-Type: text/html; charset=UTF-8", "Content-Transfer-Encoding: base64", "", Buffer.from(html, "utf8").toString("base64")];
   if (logo) parts.push(`--${boundary}`, "Content-Type: image/png", "Content-Transfer-Encoding: base64", "Content-ID: <salikha-invoice-logo>", "Content-Disposition: inline; filename=salikha-logo.png", "", logo);
+  if (paymentQr) parts.push(`--${boundary}`, "Content-Type: image/png", "Content-Transfer-Encoding: base64", "Content-ID: <salikha-payment-qr>", "Content-Disposition: inline; filename=qr-ph.png", "", paymentQr);
   return Buffer.from([...headers, "", ...parts, `--${boundary}--`, ""].join("\r\n"), "utf8").toString("base64url");
 }

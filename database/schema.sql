@@ -157,6 +157,7 @@ create unique index invoices_one_active_per_booking_idx on public.invoices (book
 create table public.invoice_settings (
   id boolean primary key default true check (id),
   logo_data_url text,
+  payment_qr_data_url text,
   updated_at timestamptz not null default now()
 );
 

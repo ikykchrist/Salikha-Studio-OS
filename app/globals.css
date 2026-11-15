@@ -765,6 +765,9 @@ button:not(:disabled):active { transform: scale(.985); }
 .invoice-totals .invoice-balance-void { background:#695d64; }
 .invoice-footnotes { grid-area:terms; min-width:0; padding-top:1px; }
 .invoice-footnotes p { color:var(--paper-muted); font-size:12px; line-height:1.55; margin:6px 0 0; overflow-wrap:anywhere; white-space:pre-wrap; }
+.invoice-payment-qr { margin:12px 0 0; }
+.invoice-payment-qr img { display:block; width:160px; height:auto; max-width:100%; background:#fff; }
+.invoice-payment-qr figcaption { color:var(--paper-muted); font-size:11px; margin-top:6px; }
 .invoice-thanks { border-top:1px solid var(--paper-rule); color:var(--paper-muted); font-size:11px; margin-top:24px; padding-top:11px; }
 
 @container invoice-document (max-width:390px) {
