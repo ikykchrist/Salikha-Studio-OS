@@ -45,20 +45,33 @@ export async function POST(request: Request) {
       const expense=await db.query('select status from public.expenses where id=$1 for update',[body.expenseId]);
       if(!expense.rowCount||expense.rows[0].status==='PAID')throw Error('Void the linked payment first. Paid expenses cannot be removed.');
       await db.query("update public.expenses set status='VOIDED',notes=concat_ws(E'\\n',notes,$2),updated_at=now() where id=$1",[body.expenseId,`Void reason: ${description}`]);
-    }else if(action==='VOID'){
+    }else if(action==='VOID'||action==='REVERSE_EXPENSE_PAYMENT'){
       if(auth.user!.role!=='ADMIN')throw Error('Admin access is required to void a posting.');
       if(!uuid(body.transactionId)||description.length<5)throw Error('Select a posting and enter a clear void reason.');
       const found=await db.query('select * from public.cash_transactions where id=$1 for update',[body.transactionId]);
       const tx=found.rows[0]; if(!tx)throw Error('Posting not found.');
       if(tx.purpose==='LEGACY'||tx.purpose==='TRANSFER')throw Error('Legacy postings and transfers need a reviewed correction. They cannot be voided here.');
       if(tx.status==='VOIDED')throw Error('This posting is already voided.');
+      const reversePayment=action==='REVERSE_EXPENSE_PAYMENT';
+      if(reversePayment&&!tx.expense_id)throw Error('Select a payment linked to an expense.');
+      if(tx.expense_id){
+        const expense=await db.query('select status,accounting_treatment from public.expenses where id=$1 for update',[tx.expense_id]);
+        if(!reversePayment&&expense.rows[0]?.accounting_treatment==='INVENTORY_PURCHASE')throw Error('Use Reverse payment for a stock purchase. Cancel the purchase through an inventory correction.');
+        const otherPayment=await db.query("select 1 from public.cash_transactions where expense_id=$1 and status='POSTED' and id<>$2 limit 1",[tx.expense_id,tx.id]);
+        if(otherPayment.rowCount)throw Error('This expense has another posted payment and needs a reviewed correction.');
+        if(reversePayment){
+          if(expense.rows[0]?.status==='VOIDED')throw Error('This expense is already voided.');
+          await db.query("update public.expenses set status='PENDING',paid_date=null,updated_at=now() where id=$1",[tx.expense_id]);
+        }else{
+          await db.query("update public.expenses set status='VOIDED',paid_date=null,notes=concat_ws(E'\\n',notes,$2),updated_at=now() where id=$1",[tx.expense_id,`Void reason: ${description}`]);
+        }
+      }
       if(tx.booking_id){
         const booking=await db.query('select status from public.bookings where id=$1 for update',[tx.booking_id]);
         if(booking.rows[0]?.status==='DONE')throw Error('Reopen the booking before voiding its payment.');
         await db.query('update public.bookings set paid_amount=greatest(0,paid_amount-$2),downpayment_amount=case when $3 then 0 else downpayment_amount end,updated_at=now() where id=$1',[tx.booking_id,tx.amount,String(tx.reference||'').startsWith('booking-deposit:')]);
         await db.query('update public.payments set voided_at=now() where reference=$1',[tx.reference]);
       }
-      if(tx.expense_id)await db.query("update public.expenses set status='PENDING',paid_date=null,updated_at=now() where id=$1",[tx.expense_id]);
       await db.query("update public.cash_transactions set status='VOIDED',void_reason=$2,voided_at=now() where id=$1",[tx.id,description]);
     }else if(action==='RECEIPT'){
       if(!uuid(body.bookingId))throw Error('Select the booking being paid.');

@@ -64,6 +64,27 @@ try{
  const corrected=(await pool.query('select paid_amount,downpayment_amount from public.bookings where id=$1',[bookingId])).rows[0];
  assert.equal(corrected.paid_amount,'800.00');assert.equal(corrected.downpayment_amount,'0.00');checks+=2;
  assert.ok((await pool.query('select voided_at from public.payments where reference=$1',[deposit[0].reference])).rows[0].voided_at);checks++;
+
+ const snapshot=await request('/api/money');
+ const rent=snapshot.transactions.find(t=>t.description===`[QA ${run}] Rent`);
+ const billPayment=snapshot.transactions.find(t=>t.expense_id===unpaid.id);
+ const stockPayment=snapshot.transactions.find(t=>t.account_id===accountId&&t.purpose==='INVENTORY_PURCHASE');
+ await request('/api/money',{requestId:randomUUID(),action:'VOID',date:'2026-01-15',transactionId:stockPayment.id,description:'QA stock purchase must keep its inventory link'},400);
+ await money('VOID',{transactionId:rent.id,description:'QA duplicate expense entry'});
+ await money('REVERSE_EXPENSE_PAYMENT',{transactionId:billPayment.id,description:'QA payment failed, still owed'});
+ const afterVoid=await request('/api/money');
+ const voidedRent=afterVoid.transactions.find(t=>t.id===rent.id);
+ assert.equal(voidedRent.status,'VOIDED');
+ assert.equal(voidedRent.void_reason,'QA duplicate expense entry');
+ assert.ok(voidedRent.voided_at);
+ const cancelledExpense=afterVoid.expenses.find(e=>e.id===rent.expense_id);
+ assert.equal(cancelledExpense.status,'VOIDED');
+ assert.equal(cancelledExpense.paid_date,null);
+ assert.equal(afterVoid.expenses.find(e=>e.id===unpaid.id).status,'PENDING');
+ assert.equal(afterVoid.transactions.find(t=>t.id===stockPayment.id).status,'POSTED');
+ checks+=7;
+ await request('/api/money',{requestId:randomUUID(),action:'PAY_EXPENSE',date:'2026-01-15',accountId,expenseId:rent.expense_id},400);
+ await money('PAY_EXPENSE',{expenseId:unpaid.id});
  console.log(`PASS: ${checks} workflow assertions. Revenue 1000, direct costs 150, operating costs 100, operating profit 750, closing cash 2850. PDFs generated for visual QA.`);
 }finally{
  // Remove only this run's tagged fixtures, never existing local records.
