@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {combinedRunningBalances} from '../lib/running-balance.ts';
+import {cashflowRows,combinedRunningBalances} from '../lib/running-balance.ts';
 const account=(id,opening_balance,is_active=true)=>({id,name:id,opening_balance,is_active});
 const row=(id,amount,direction,extra={})=>({id,amount,direction,account_id:'cash',transaction_date:'2026-10-31',created_at:'2026-10-31T10:00:00Z',status:'POSTED',purpose:'BOOKING_RECEIPT',reference:null,...extra});
 let checks=0;const eq=(a,b)=>{assert.deepEqual(a,b);checks++;};
@@ -11,6 +11,22 @@ eq(combinedRunningBalances(accounts,[...history].reverse()).get('out'),450);
 const transfer=[row('out-leg',200,'OUTFLOW',{purpose:'TRANSFER',reference:'workflow:transfer:out'}),row('in-leg',200,'INFLOW',{purpose:'TRANSFER',reference:'workflow:transfer:in',account_id:'bank'})];
 eq([...combinedRunningBalances(accounts,transfer).values()],[400,400]);
 eq(combinedRunningBalances(accounts,[transfer[0]]).get('out-leg'),200); // Incomplete historical postings still affect the book balance.
+const [outgoing,incoming]=transfer.map((t,i)=>({...t,description:'Move funds',account_name:i?'Savings':'Cash'}));
+const filters={from:'2026-10-01',to:'2026-10-31',account:'',status:'',query:''};
+const list=(rows,overrides={})=>cashflowRows(rows,{...filters,...overrides});
+for(const account of ['','cash','bank']){
+ const entries=list([outgoing,incoming],{account});
+ eq(entries.length,1);
+ eq(entries[0].transfer,{outgoing,incoming});
+}
+eq(list([outgoing,incoming],{query:'savings'}).length,1);
+eq(list([outgoing,incoming],{status:'VOIDED'}).length,0);
+eq(list([outgoing]).map(r=>r.transaction.id),['out-leg']);
+eq(list([outgoing,{...incoming,amount:100}]).length,2);
+const voided={...history[2],description:'Expense',account_name:'Cash'};
+eq(list([voided,voided]).map(r=>r.transaction.id),['void']);
+eq(list([voided],{status:'POSTED'}).length,0);
+eq(list([voided],{status:'VOIDED'}).map(r=>r.transaction.status),['VOIDED']);
 eq(combinedRunningBalances([account('cash',400),account('inactive',20,false)],[row('new',100,'INFLOW')]).get('new'),520);
 eq(combinedRunningBalances([account('cash','0.10')],[row('cents','0.20','INFLOW')]).get('cents'),0.30);
 eq(combinedRunningBalances(accounts,[row('negative',500,'OUTFLOW')]).get('negative'),-100);

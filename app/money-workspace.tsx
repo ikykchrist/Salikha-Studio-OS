@@ -1,6 +1,6 @@
 'use client';
 import {showToast} from '../lib/toasts';
-import {combinedRunningBalances} from '../lib/running-balance';
+import {cashflowRows,combinedRunningBalances,transferPairs} from '../lib/running-balance';
 import {StatusBadge} from './status-badge';
 import {useEffect,useState} from 'react';
 import {ArrowDownLeft,ArrowUpRight,ArrowLeftRight,Plus,RefreshCw,X,ShieldCheck} from 'lucide-react';
@@ -28,28 +28,33 @@ export function MoneyActionForm({action,bookingId='',expenseId='',onClose,onSave
 }
 export function MoneyWorkspace(){
  const [section,setSection]=useState<'cash'|'bills'>('cash');
+ const [voidingId,setVoidingId]=useState<string|null>(null);
  const [data,setData]=useState<Snapshot|null>(null),[error,setError]=useState(''),[loading,setLoading]=useState(true),[revision,setRevision]=useState(0),[action,setAction]=useState(''),[expenseId,setExpenseId]=useState(''),[query,setQuery]=useState(''),[account,setAccount]=useState(''),[status,setStatus]=useState('POSTED'),[from,setFrom]=useState(todayManila().slice(0,7)+'-01'),[to,setTo]=useState(todayManila()),[countAccount,setCountAccount]=useState(''),[actual,setActual]=useState(''),[countNote,setCountNote]=useState(''),[countBusy,setCountBusy]=useState(false),[notice,setNotice]=useState('');
  useEffect(()=>{let cancel=false;setLoading(true);apiJson('/api/money').then(d=>{if(!cancel){setData(d);setError('');}}).catch(e=>{if(!cancel)setError(e.message);}).finally(()=>{if(!cancel)setLoading(false);});return()=>{cancel=true;};},[revision]);
  const transactions=data?.transactions||[];const accounts=data?.accounts||[];const posted=transactions.filter(t=>t.status==='POSTED');
- const runningBalances=combinedRunningBalances(accounts,transactions);
+ const pairs=transferPairs(transactions);
+ const runningBalances=combinedRunningBalances(accounts,transactions,pairs);
  const inventoryExpenseIds=new Set((data?.expenses||[]).filter(e=>e.accounting_treatment==='INVENTORY_PURCHASE').map(e=>e.id));
  const balance=(id:string,date='9999-12-31')=>Number(accounts.find(a=>a.id===id)?.opening_balance||0)+posted.filter(t=>t.account_id===id&&t.transaction_date<=date).reduce((s,t)=>s+(t.direction==='INFLOW'?1:-1)*Number(t.amount),0);
- const visible=transactions.filter(t=>t.transaction_date>=from&&t.transaction_date<=to&&(!account||t.account_id===account)&&(!status||t.status===status)&&`${t.description} ${t.account_name} ${t.external_reference||''} ${t.reference||''}`.toLowerCase().includes(query.toLowerCase())).reverse();
+ const visible=cashflowRows(transactions,{from,to,account,status,query},pairs);
  const unpaid=(data?.expenses||[]).filter(e=>!['PAID','VOIDED'].includes(e.status));
  const expenses=unpaid.filter(e=>`${e.description} ${e.category}`.toLowerCase().includes(query.toLowerCase()));
  const refresh=()=>setRevision(r=>r+1);
  const voidEntry=async(t:TransactionRow,reversePayment=false)=>{
+  if(voidingId||loading)return;
   const instruction=reversePayment?'This reopens the linked bill.':t.expense_id?'This also cancels the linked bill.':'The posting stays in the ledger for audit.';
   const reason=window.prompt(`${reversePayment?'Reverse payment':'Void'} for ${t.description}. ${instruction} Enter the reason:`);
   if(!reason)return;
+  setVoidingId(t.id);
+  setError('');
   try{
    await apiJson('/api/money',{requestId:crypto.randomUUID(),action:reversePayment?'REVERSE_EXPENSE_PAYMENT':'VOID',transactionId:t.id,date:todayManila(),description:reason});
-   setStatus(current=>current==='POSTED'?'':current);
-   refresh();
+   setData(await apiJson('/api/money'));
    showToast(reversePayment?'Payment reversed. The bill is unpaid again.':t.expense_id?'Posting and linked expense voided.':'Posting voided. Balance updated; audit history retained.');
   }catch(e){setError(e instanceof Error?e.message:'Could not void posting.');}
+  finally{setVoidingId(null);}
  };
- return <div className="workflow-workspace"><section className="page-heading"><div><p className="eyebrow">Finance / Money workspace</p><h1>Cashflow</h1><p className="subheading">Record collections, cash out and transfers once. Manage unpaid bills here too.</p></div><button className="secondary-button" onClick={refresh} disabled={loading}><RefreshCw size={17}/> Refresh</button></section>
+ return <div className="workflow-workspace"><section className="page-heading"><div><p className="eyebrow">Finance / Money workspace</p><h1>Cashflow</h1><p className="subheading">Record collections, cash out and transfers once. Manage unpaid bills here too.</p></div><button className="secondary-button" onClick={refresh} disabled={loading||Boolean(voidingId)}><RefreshCw size={17}/> Refresh</button></section>
  <div className="workflow-actions cashflow-quick-actions"><button className="primary-button" data-intent="success" onClick={()=>setAction('RECEIPT')}><ArrowDownLeft/> Collect payment</button><button className="secondary-button" data-intent="warning" onClick={()=>setAction('EXPENSE')}><ArrowUpRight/> Record expense / cash out</button><button className="secondary-button" data-intent="info" onClick={()=>setAction('TRANSFER')}><ArrowLeftRight/> Transfer</button><button className="secondary-button" onClick={()=>setAction('OTHER')}><Plus/> Capital, loans & other</button></div>
  <div className="semantic-legend" aria-label="Cashflow color guide"><span><ArrowDownLeft size={15} className="money-positive"/> Cash in · received</span><span><ArrowUpRight size={15} className="money-out"/> Cash out · paid</span><span><ArrowLeftRight size={15}/> Transfers · between your accounts</span></div>
  {error&&<p className="form-warning" role="alert">{error}</p>}{loading&&<p role="status">Loading verified records…</p>}
@@ -58,10 +63,27 @@ export function MoneyWorkspace(){
  {section==='cash'&&<p className="workflow-help">Balance is the running total of cash and all accounts after each transaction. Filters do not reset it. Voided entries have no cash effect.</p>}
  {section==='bills'&&<p className="workflow-help">All unpaid bills, including older costs. These affect cash only when paid; use Pay bill to create the cash-out entry automatically.</p>}
  <section className="workflow-filters">{section==='cash'&&<><label>From<input type="date" value={from} onChange={e=>setFrom(e.target.value)}/></label><label>To<input type="date" value={to} onChange={e=>setTo(e.target.value)}/></label></>}<label>Search<input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Description or reference"/></label>{section==='cash'&&<><label>Account<select value={account} onChange={e=>setAccount(e.target.value)}><option value="">All accounts</option>{accounts.map(a=><option value={a.id} key={a.id}>{a.name}</option>)}</select></label><label>Status<select value={status} onChange={e=>setStatus(e.target.value)}><option value="POSTED">Posted</option><option value="VOIDED">Voided</option><option value="">All records</option></select></label></>}</section>
- {section==='cash'&&from>to?<p className="form-warning">Start date must be on or before end date.</p>:<section className="panel workflow-table-wrap"><table className="workflow-table"><caption>{section==='cash'?'Cash ledger · actual transaction dates':'Unpaid bills · all dates'}</caption><thead><tr>{(section==='cash'?['Date / account','Description / source','Cash in','Cash out','Balance','Status / action']:['Date','Cost / category','Amount','Status','Action']).map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{section==='cash'?visible.map(t=><tr key={t.id}><td>{t.transaction_date}<small>{t.account_name}</small></td><td>{t.description}<small>{t.purpose.replaceAll('_',' ')} · {t.external_reference||t.reference||'No reference'}</small><small>Posted by {t.actor_name||'Legacy / unavailable'}</small>{t.void_reason&&<small>Void: {t.void_reason}</small>}</td><td className="money-positive">{t.direction==='INFLOW'?money(Number(t.amount)):'—'}</td><td className="money-out">{t.direction==='OUTFLOW'?money(Number(t.amount)):'—'}</td><td className="ledger-running-balance" title="Overall balance across cash and all accounts after this transaction">{money(runningBalances.get(t.id)??0)}</td><td><StatusBadge status={t.status}/>{t.status==='POSTED'&&!['LEGACY','TRANSFER'].includes(t.purpose)&&<>
- {(!t.expense_id||!inventoryExpenseIds.has(t.expense_id))&&<button className="text-button" data-intent="danger" onClick={()=>voidEntry(t)}>Void with reason</button>}
- {t.expense_id&&<button className="text-button" onClick={()=>voidEntry(t,true)}>Reverse payment</button>}
- </>}</td></tr>):expenses.map(e=><tr key={e.id}><td>{e.expense_date}</td><td>{e.description}<small>{e.category} · {e.accounting_treatment==='INVENTORY_PURCHASE'?'Stock purchase (asset)':e.classification}</small></td><td>{money(Number(e.amount))}</td><td><StatusBadge status={e.status}/></td><td>{!['PAID','VOIDED'].includes(e.status)&&<div><button className="secondary-button" data-intent="warning" onClick={()=>{setExpenseId(e.id);setAction('PAY_EXPENSE');}}>Pay bill</button><button className="text-button" data-intent="danger" onClick={async()=>{const reason=window.prompt("Reason for voiding this unpaid expense:");if(!reason)return;try{await apiJson("/api/money",{requestId:crypto.randomUUID(),action:"VOID_EXPENSE",expenseId:e.id,date:todayManila(),description:reason});refresh();}catch(c){setError(c instanceof Error?c.message:"Could not void expense.");}}}>Void with reason</button></div>}</td></tr>)}</tbody></table>{(section==='cash'?visible.length:expenses.length)===0&&<p className="workflow-empty">{section==='cash'?'No records in this date range.':query?'No unpaid bills match your search.':'No unpaid bills. All recorded costs are paid or voided.'}</p>}</section>}
+ {section==='cash'&&from>to?<p className="form-warning">Start date must be on or before end date.</p>:<section className="panel workflow-table-wrap"><table className="workflow-table"><caption>{section==='cash'?'Cash ledger · actual transaction dates':'Unpaid bills · all dates'}</caption><thead><tr>{(section==='cash'?['Date / account','Description / source','Cash in','Cash out','Balance','Status / action']:['Date','Cost / category','Amount','Status','Action']).map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{section==='cash'?visible.map(({transaction:t,transfer})=>transfer ? (
+ <tr key={t.id}>
+  <td>{t.transaction_date}<small>{t.account_name} → {transfer.incoming.account_name}</small></td>
+  <td>Transfer{t.description!=='Transfer between own accounts'&&<small>{t.description}</small>}{t.external_reference&&<small>{t.external_reference}</small>}</td>
+  <td colSpan={2} className="ledger-transfer-amount">{money(Number(t.amount))}</td>
+  <td className="ledger-running-balance">{money(runningBalances.get(t.id)??0)}</td>
+  <td><StatusBadge status={t.status}/></td>
+ </tr>
+ ):(
+ <tr key={t.id}>
+  <td>{t.transaction_date}<small>{t.account_name}</small></td>
+  <td>{t.description}<small>{t.purpose.replaceAll('_',' ')} · {t.external_reference||t.reference||'No reference'}</small><small>Posted by {t.actor_name||'Legacy / unavailable'}</small>{t.void_reason&&<small>Void: {t.void_reason}</small>}</td>
+  <td className="money-positive">{t.direction==='INFLOW'?money(Number(t.amount)):'—'}</td>
+  <td className="money-out">{t.direction==='OUTFLOW'?money(Number(t.amount)):'—'}</td>
+  <td className="ledger-running-balance" title="Overall balance across cash and all accounts after this transaction">{money(runningBalances.get(t.id)??0)}</td>
+  <td><StatusBadge status={t.status}/>{t.status==='POSTED'&&!['LEGACY','TRANSFER'].includes(t.purpose)&&<>
+   {(!t.expense_id||!inventoryExpenseIds.has(t.expense_id))&&<button className="text-button" data-intent="danger" disabled={loading||Boolean(voidingId)} onClick={()=>voidEntry(t)}>Void with reason</button>}
+   {t.expense_id&&<button className="text-button" disabled={loading||Boolean(voidingId)} onClick={()=>voidEntry(t,true)}>Reverse payment</button>}
+  </>}</td>
+ </tr>
+ )):expenses.map(e=><tr key={e.id}><td>{e.expense_date}</td><td>{e.description}<small>{e.category} · {e.accounting_treatment==='INVENTORY_PURCHASE'?'Stock purchase (asset)':e.classification}</small></td><td>{money(Number(e.amount))}</td><td><StatusBadge status={e.status}/></td><td>{!['PAID','VOIDED'].includes(e.status)&&<div><button className="secondary-button" data-intent="warning" onClick={()=>{setExpenseId(e.id);setAction('PAY_EXPENSE');}}>Pay bill</button><button className="text-button" data-intent="danger" onClick={async()=>{const reason=window.prompt("Reason for voiding this unpaid expense:");if(!reason)return;try{await apiJson("/api/money",{requestId:crypto.randomUUID(),action:"VOID_EXPENSE",expenseId:e.id,date:todayManila(),description:reason});refresh();}catch(c){setError(c instanceof Error?c.message:"Could not void expense.");}}}>Void with reason</button></div>}</td></tr>)}</tbody></table>{(section==='cash'?visible.length:expenses.length)===0&&<p className="workflow-empty">{section==='cash'?'No records in this date range.':query?'No unpaid bills match your search.':'No unpaid bills. All recorded costs are paid or voided.'}</p>}</section>}
  {section==='cash'&&<section className="panel workflow-reconcile"><h2>Count and reconcile</h2><p className="workflow-help">Compare your real cash or bank balance with the ledger. A variance is recorded for review; this does not change cash.</p><form onSubmit={async e=>{e.preventDefault();setCountBusy(true);setError('');try{await apiJson('/api/cash-reconciliation',{accountId:countAccount,date:to,actualBalance:actual,notes:countNote});setNotice('Count saved. Review any variance before correcting the books.');refresh();showToast('Account count saved. Review any variance; cash balances were not changed.');}catch(c){setError(c instanceof Error?c.message:'Count failed.');}finally{setCountBusy(false);}}}><div className="workflow-filters"><label>Account<select required value={countAccount} onChange={e=>setCountAccount(e.target.value)}><option value="">Choose account</option>{accounts.filter(a=>a.is_active).map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label><label>Actual balance on {to}<input required type="number" min="0" step="0.01" value={actual} onChange={e=>setActual(e.target.value)}/></label><label>Count notes<input value={countNote} onChange={e=>setCountNote(e.target.value)}/></label><button className="secondary-button" disabled={countBusy}>{countBusy?'Saving…':'Save count'}</button></div>{countAccount&&<p>Book balance as of {to}: {money(balance(countAccount,to))}</p>}{notice&&<p className="workflow-callout" data-tone="success" role="status">{notice}</p>}</form></section>}</>}
  {action&&<MoneyActionForm action={action} expenseId={expenseId} onClose={()=>{setAction('');setExpenseId('');}} onSaved={refresh}/>}</div>;
 }
