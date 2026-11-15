@@ -14,9 +14,8 @@ export function formatManilaTime(value: string | null | undefined): string {
 /** Date-only booking values must not shift when the app server/browser runs outside Manila. */
 export function formatManilaDate(value: string | Date | null | undefined, options: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", year: "numeric" }): string {
   if (!value) return "—";
-  // PostgreSQL DATE can arrive as a Date object in server-side queries.
-  const dateOnly = typeof value === "string" ? value.slice(0, 10) : value instanceof Date && !Number.isNaN(value.getTime()) ? value.toISOString().slice(0, 10) : "";
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) return "—";
-  const date = new Date(`${dateOnly}T12:00:00+08:00`);
+  // Older invoice snapshots may still contain the ISO timestamp of a Manila date.
+  if (typeof value === "string" && !/^\d{4}-\d{2}-\d{2}(?:$|T)/.test(value)) return "—";
+  const date = value instanceof Date ? value : new Date(value.length === 10 ? `${value}T12:00:00+08:00` : value);
   return Number.isNaN(date.getTime()) ? "—" : new Intl.DateTimeFormat("en-PH", { ...options, timeZone: MANILA_TIME_ZONE }).format(date);
 }

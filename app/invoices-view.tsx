@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, FileDown, ImageDown, ImagePlus, LockKeyhole, Mail, Plus, Receipt, RefreshCw, Send, ShieldCheck, Trash2, X } from "lucide-react";
+import { ArrowRight, FileDown, ImageDown, ImagePlus, LockKeyhole, Mail, Plus, Receipt, RefreshCw, Send, Trash2, X } from "lucide-react";
 import { showConfirm, showNotice } from "../lib/ui-dialogs";
 import { formatManilaDate, formatManilaTime } from "../lib/manila-datetime";
 import { exportInvoicePage } from "../lib/invoice-export";
@@ -12,7 +12,7 @@ type BookingDetails = { eventName?: string | null; packageName?: string | null; 
 type Invoice = { id: string; invoice_number: string; client_id: string; booking_id: string | null; issue_date: string; due_date: string | null; status: "DRAFT" | "SENT" | "PAID" | "VOID"; line_items: InvoiceLine[]; booking_details: BookingDetails; subtotal: number; discount_amount: number; tax_rate: number; tax_amount: number; total_amount: number; notes: string | null; terms: string | null; email_sent_to: string | null; sent_at: string | null; client_name: string; client_email: string | null; event_name: string | null; event_date: string | null; start_time: string | null; end_time: string | null; venue: string | null; package_name: string | null; booking_paid: number | null };
 const peso = (value: number) => `₱${Number(value || 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila" }).format(new Date());
-const addDays = (value: string, days: number) => { const date = new Date(`${value}T12:00:00`); date.setDate(date.getDate() + days); return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila" }).format(date); };
+const addDays = (value: string, days: number) => { const date = new Date(`${value}T12:00:00Z`); date.setUTCDate(date.getUTCDate() + days); return date.toISOString().slice(0, 10); };
 const dateLabel = (value: string | null) => value ? formatManilaDate(value, { month: "short", day: "numeric", year: "numeric" }) : "TBA";
 const timeLabel = (value: string | null | undefined) => value ? formatManilaTime(value) : "TBA";
 
@@ -147,14 +147,54 @@ function InvoicePreview({ invoice, logoDataUrl, emailReady, working, onSend, onV
   const due = Math.max(0, Number(invoice.total_amount) - paid);
   const label = invoice.status === "SENT" && due === 0 ? "PAID" : invoice.status === "SENT" && invoice.due_date && invoice.due_date < today() ? "OVERDUE" : invoice.status;
   const event = { eventName: invoice.event_name || invoice.booking_details?.eventName, packageName: invoice.package_name || invoice.booking_details?.packageName, eventDate: invoice.event_date || invoice.booking_details?.eventDate || null, startTime: invoice.start_time || invoice.booking_details?.startTime, endTime: invoice.end_time || invoice.booking_details?.endTime, venue: invoice.venue || invoice.booking_details?.venue };
+  const eventTime = event.startTime && event.endTime ? `${timeLabel(event.startTime)} – ${timeLabel(event.endTime)}` : "TBA";
+  const discount = Number(invoice.discount_amount) || 0;
+  const tax = Number(invoice.tax_amount) || 0;
   return <aside className="invoice-preview panel"><div className="invoice-preview-toolbar"><span className={`invoice-status ${label.toLowerCase()}`}>{label}</span><div className="invoice-actions"><button className="secondary-button" type="button" onClick={() => void download("pdf")} disabled={Boolean(exporting)}><FileDown aria-hidden="true" /> {exporting === "pdf" ? "Saving PDF…" : "Save PDF"}</button><button className="secondary-button" type="button" onClick={() => void download("jpg")} disabled={Boolean(exporting)}><ImageDown aria-hidden="true" /> {exporting === "jpg" ? "Saving JPG…" : "Save JPG"}</button>{invoice.status !== "VOID" && invoice.status !== "PAID" && <button className="primary-button" type="button" onClick={onSend} disabled={working || !emailReady || !invoice.client_email}>{working ? "Sending…" : <><Send aria-hidden="true" /> Send invoice</>}</button>}</div></div>
-    <article className="invoice-paper" id="printable-invoice" ref={paperRef}><header className="invoice-paper-head"><div className="invoice-brand-lockup">{logoDataUrl ? <img className="invoice-paper-logo" src={logoDataUrl} alt="Salikha Studio logo" /> : <span className="invoice-brand-mark">S</span>}<div><strong>Salikha Studio</strong><small>Event Photo Services</small></div></div><div className="invoice-heading"><span>INVOICE</span><strong>{invoice.invoice_number}</strong></div></header>
-      <div className="invoice-meta"><div className="invoice-bill-to"><small>Bill to</small><strong>{invoice.client_name}</strong><span>{invoice.client_email || "No client email"}</span></div><div className="invoice-meta-dates"><div><small>Invoice date</small><strong>{dateLabel(invoice.issue_date)}</strong></div><div className="invoice-due-date"><small>Due date</small><strong>{dateLabel(invoice.due_date)}</strong></div></div></div>
-      <div className="invoice-event-link"><span>Event</span><strong>{event.eventName || invoice.event_name || "Event booking"}</strong><span>{event.packageName || "Package"}</span><span>{dateLabel(event.eventDate || invoice.event_date)}</span><span>{timeLabel(event.startTime)} – {timeLabel(event.endTime)}</span><span>{event.venue || "Venue not specified"}</span></div>
-      <table className="invoice-items-table"><thead><tr><th>Description</th><th>Qty</th><th>Rate</th><th>Amount</th></tr></thead><tbody>{lines.map((line, index) => <tr key={`${line.description}-${index}`}><td>{line.description}</td><td>{Number(line.quantity).toLocaleString("en-PH")}</td><td>{peso(Number(line.unitPrice))}</td><td>{peso(Number(line.quantity) * Number(line.unitPrice))}</td></tr>)}</tbody></table>
-      <div className="invoice-totals"><div><span>Booking total</span><strong>{peso(Number(invoice.total_amount))}</strong></div>{paid > 0 && <div><span>Paid to date</span><strong>−{peso(paid)}</strong></div>}<div className="invoice-balance"><span>Balance due</span><strong>{peso(due)}</strong></div></div>
-      {invoice.terms && <div className="invoice-footnotes"><div><strong>Payment terms</strong><p>{invoice.terms}</p></div></div>}
-      <footer className="invoice-thanks"><ShieldCheck aria-hidden="true" /><span>Thank you for choosing Salikha Studio.</span></footer>
+    <article className="invoice-paper" id="printable-invoice" aria-labelledby="invoice-document-title" ref={paperRef}>
+      <header className="invoice-paper-head">
+        <div className="invoice-brand-lockup">
+          {logoDataUrl ? <img className="invoice-paper-logo" src={logoDataUrl} alt="" /> : <span className="invoice-brand-mark" aria-hidden="true">S</span>}
+          <div><strong>Salikha Studio</strong><small>Event Photo Services</small></div>
+        </div>
+        <div className="invoice-heading">
+          <h2 id="invoice-document-title">Invoice</h2>
+          <span>{invoice.invoice_number}</span>
+          {invoice.status === "VOID" && <strong className="invoice-void-mark">Void</strong>}
+        </div>
+      </header>
+      <div className="invoice-meta">
+        <div className="invoice-bill-to"><small>Bill to</small><strong>{invoice.client_name}</strong>{invoice.client_email && <span>{invoice.client_email}</span>}</div>
+        <dl className="invoice-meta-dates">
+          <div><dt>Issued</dt><dd>{dateLabel(invoice.issue_date)}</dd></div>
+          <div><dt>Due date</dt><dd>{dateLabel(invoice.due_date)}</dd></div>
+        </dl>
+      </div>
+      <section className="invoice-event-link" aria-label="Event details">
+        <small>Event</small>
+        <strong>{event.eventName || "Event booking"}</strong>
+        <dl>
+          <div><dt>Service</dt><dd>{event.packageName || "Event photo service"}</dd></div>
+          <div><dt>Schedule</dt><dd>{dateLabel(event.eventDate)}{eventTime !== "TBA" && <> · {eventTime}</>}</dd></div>
+          <div className="invoice-event-venue"><dt>Venue</dt><dd>{event.venue || "TBA"}</dd></div>
+        </dl>
+      </section>
+      <table className="invoice-items-table" aria-label="Invoice items" data-invoice-break>
+        <thead><tr><th scope="col">Description</th><th scope="col">Qty</th><th scope="col">Rate</th><th scope="col">Amount</th></tr></thead>
+        <tbody>{lines.map((line, index) => <tr key={`${line.description}-${index}`} data-invoice-break={index > 0 ? "" : undefined}><td>{line.description}</td><td>{Number(line.quantity).toLocaleString("en-PH")}</td><td>{peso(Number(line.unitPrice))}</td><td>{peso(Number(line.quantity) * Number(line.unitPrice))}</td></tr>)}</tbody>
+      </table>
+      <section className="invoice-payment-summary" aria-label="Payment summary" data-invoice-break>
+        <dl className="invoice-totals">
+          {(discount > 0 || tax > 0) && <div><dt>Subtotal</dt><dd>{peso(Number(invoice.subtotal))}</dd></div>}
+          {discount > 0 && <div><dt>Discount</dt><dd>−{peso(discount)}</dd></div>}
+          {tax > 0 && <div><dt>Tax</dt><dd>{peso(tax)}</dd></div>}
+          <div><dt>Invoice total</dt><dd>{peso(Number(invoice.total_amount))}</dd></div>
+          {paid > 0 && <div><dt>Paid to date</dt><dd>−{peso(paid)}</dd></div>}
+          <div className={`invoice-balance${invoice.status === "VOID" ? " invoice-balance-void" : ""}`}><dt>{invoice.status === "VOID" ? "Voided balance" : "Balance due"}</dt><dd>{peso(due)}</dd></div>
+        </dl>
+        {invoice.terms && <div className="invoice-footnotes"><strong>Payment terms</strong><p>{invoice.terms}</p></div>}
+      </section>
+      <footer className="invoice-thanks" data-invoice-break>Thank you for choosing Salikha Studio.</footer>
     </article>
     <div className="invoice-record-footer"><span>{invoice.email_sent_to ? `Last sent to ${invoice.email_sent_to}` : invoice.client_email ? `Ready to send to ${invoice.client_email}` : "Add a client email to enable sending"}</span>{invoice.status !== "VOID" && invoice.status !== "PAID" && <button className="text-button danger-button" type="button" onClick={onVoid}>Void invoice <ArrowRight aria-hidden="true" /></button>}</div>
   </aside>;

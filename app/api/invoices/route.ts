@@ -13,8 +13,8 @@ export async function GET(request: Request) {
   try {
     const pool = getLocalPostgresPool();
     const [invoiceResult, bookingResult, settingsResult] = await Promise.all([
-      pool.query(`select i.*, c.display_name as client_name, c.email as client_email, b.paid_amount as booking_paid, b.event_name, b.event_date, b.start_time, b.end_time, b.venue, p.name as package_name from public.invoices i join public.clients c on c.id=i.client_id left join public.bookings b on b.id=i.booking_id left join public.service_packages p on p.id=b.package_id order by i.created_at desc`),
-      pool.query(`select b.id,b.client_id,b.event_name,b.event_date,b.start_time,b.end_time,b.venue,b.total_amount,b.downpayment_amount,b.paid_amount,b.status,c.display_name as client_name,c.email as client_email,p.name as package_name from public.bookings b join public.clients c on c.id=b.client_id left join public.service_packages p on p.id=b.package_id where b.status in ('PENDING','CONFIRMED') and not exists (select 1 from public.invoices i where i.booking_id=b.id and i.status <> 'VOID') order by b.event_date,b.start_time nulls last limit 500`),
+      pool.query(`select i.*, i.issue_date::text as issue_date, i.due_date::text as due_date, c.display_name as client_name, c.email as client_email, b.paid_amount as booking_paid, b.event_name, b.event_date::text as event_date, b.start_time, b.end_time, b.venue, p.name as package_name from public.invoices i join public.clients c on c.id=i.client_id left join public.bookings b on b.id=i.booking_id left join public.service_packages p on p.id=b.package_id order by i.created_at desc`),
+      pool.query(`select b.id,b.client_id,b.event_name,b.event_date::text as event_date,b.start_time,b.end_time,b.venue,b.total_amount,b.downpayment_amount,b.paid_amount,b.status,c.display_name as client_name,c.email as client_email,p.name as package_name from public.bookings b join public.clients c on c.id=b.client_id left join public.service_packages p on p.id=b.package_id where b.status in ('PENDING','CONFIRMED') and not exists (select 1 from public.invoices i where i.booking_id=b.id and i.status <> 'VOID') order by b.event_date,b.start_time nulls last limit 500`),
       pool.query("select logo_data_url from public.invoice_settings where id=true"),
     ]);
     const emailConnection = invoiceEmailConfigured() ? await invoiceEmailConnection() : undefined;
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
   const client = await getLocalPostgresPool().connect();
   try {
     await client.query("begin");
-    const booking = await client.query(`select b.id,b.client_id,b.event_name,b.event_date,b.start_time,b.end_time,b.venue,b.total_amount,b.paid_amount,b.discount_amount,b.transport_amount,b.addons_amount,to_jsonb(b)->'addons_snapshot' as addons_snapshot,c.display_name as client_name,c.email as client_email,p.name as package_name from public.bookings b join public.clients c on c.id=b.client_id left join public.service_packages p on p.id=b.package_id where b.id=$1::uuid and b.status in ('PENDING','CONFIRMED') for update of b`, [body.bookingId]);
+    const booking = await client.query(`select b.id,b.client_id,b.event_name,b.event_date::text as event_date,b.start_time,b.end_time,b.venue,b.total_amount,b.paid_amount,b.discount_amount,b.transport_amount,b.addons_amount,to_jsonb(b)->'addons_snapshot' as addons_snapshot,c.display_name as client_name,c.email as client_email,p.name as package_name from public.bookings b join public.clients c on c.id=b.client_id left join public.service_packages p on p.id=b.package_id where b.id=$1::uuid and b.status in ('PENDING','CONFIRMED') for update of b`, [body.bookingId]);
     if (!booking.rowCount) { await client.query("rollback"); return Response.json({ error: "That booking is no longer active. Refresh and choose an active booking." }, { status: 409 }); }
     const event = booking.rows[0];
     const duplicate = await client.query("select invoice_number from public.invoices where booking_id=$1::uuid and status <> 'VOID' limit 1", [body.bookingId]);
@@ -52,7 +52,7 @@ export async function POST(request: Request) {
       ? detailedLines
       : [{ description: `${event.package_name || "Event photo service"} · ${event.event_name}`, quantity: 1, unitPrice: total }];
     const bookingDetails = { eventName: event.event_name, packageName: event.package_name, eventDate: event.event_date, startTime: event.start_time, endTime: event.end_time, venue: event.venue };
-    const created = await client.query(`insert into public.invoices(client_id,booking_id,due_date,status,line_items,booking_details,subtotal,total_amount,terms,created_by) values($1::uuid,$2::uuid,$3::date,'DRAFT',$4::jsonb,$5::jsonb,$6::numeric,$6::numeric,$7,$8::uuid) returning *`, [event.client_id, event.id, body.dueDate, JSON.stringify(lineItems), JSON.stringify(bookingDetails), total, terms, auth.user!.id]);
+    const created = await client.query(`insert into public.invoices(client_id,booking_id,due_date,status,line_items,booking_details,subtotal,total_amount,terms,created_by) values($1::uuid,$2::uuid,$3::date,'DRAFT',$4::jsonb,$5::jsonb,$6::numeric,$6::numeric,$7,$8::uuid) returning *, issue_date::text as issue_date, due_date::text as due_date`, [event.client_id, event.id, body.dueDate, JSON.stringify(lineItems), JSON.stringify(bookingDetails), total, terms, auth.user!.id]);
     await client.query("commit");
     return Response.json({ invoice: { ...created.rows[0], client_name: event.client_name, client_email: event.client_email, booking_paid: event.paid_amount } }, { status: 201 });
   } catch (error) {
