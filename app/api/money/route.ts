@@ -44,7 +44,7 @@ export async function POST(request: Request) {
       if(auth.user!.role!=='ADMIN'||!uuid(body.expenseId)||description.length<5)throw Error('An administrator must select the expense and give a void reason.');
       const expense=await db.query('select status from public.expenses where id=$1 for update',[body.expenseId]);
       if(!expense.rowCount||expense.rows[0].status==='PAID')throw Error('Void the linked payment first. Paid expenses cannot be removed.');
-      await db.query("update public.expenses set status='VOIDED',notes=concat_ws(E'\\n',notes,$2),updated_at=now() where id=$1",[body.expenseId,`Void reason: ${description}`]);
+      await db.query("update public.expenses set status='VOIDED',notes=concat_ws(E'\\n',notes,$2::text),updated_at=now() where id=$1",[body.expenseId,`Void reason: ${description}`]);
     }else if(action==='VOID'||action==='REVERSE_EXPENSE_PAYMENT'){
       if(auth.user!.role!=='ADMIN')throw Error('Admin access is required to void a posting.');
       if(!uuid(body.transactionId)||description.length<5)throw Error('Select a posting and enter a clear void reason.');
@@ -63,7 +63,7 @@ export async function POST(request: Request) {
           if(expense.rows[0]?.status==='VOIDED')throw Error('This expense is already voided.');
           await db.query("update public.expenses set status='PENDING',paid_date=null,updated_at=now() where id=$1",[tx.expense_id]);
         }else{
-          await db.query("update public.expenses set status='VOIDED',paid_date=null,notes=concat_ws(E'\\n',notes,$2),updated_at=now() where id=$1",[tx.expense_id,`Void reason: ${description}`]);
+          await db.query("update public.expenses set status='VOIDED',paid_date=null,notes=concat_ws(E'\\n',notes,$2::text),updated_at=now() where id=$1",[tx.expense_id,`Void reason: ${description}`]);
         }
       }
       if(tx.booking_id){
