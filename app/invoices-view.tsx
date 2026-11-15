@@ -28,6 +28,14 @@ function readPng(file: Blob): Promise<string> {
   });
 }
 
+async function paymentQrImageType(file: File) {
+  const header = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+  if ([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a].every((byte, index) => header[index] === byte)) return "image/png";
+  if (header[0] === 0xff && header[1] === 0xd8 && header[2] === 0xff) return "image/jpeg";
+  if (String.fromCharCode(...header.slice(0, 4)) === "RIFF" && String.fromCharCode(...header.slice(8, 12)) === "WEBP") return "image/webp";
+  throw new Error("Choose a PNG, JPG, or WebP image for QR Ph.");
+}
+
 async function compactPaymentQr(image: HTMLImageElement) {
   const canvas = document.createElement("canvas");
   const context = canvas.getContext("2d", { alpha: false });
@@ -44,7 +52,7 @@ async function compactPaymentQr(image: HTMLImageElement) {
     const png = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/png"));
     if (png && png.size <= STORED_IMAGE_BYTES) return readPng(png);
   }
-  throw new Error("The QR Ph image could not be prepared. Choose a PNG with a clearly visible QR code.");
+  throw new Error("The QR Ph image could not be prepared. Choose an image with a clearly visible QR code.");
 }
 
 export function InvoicesView() {
@@ -115,18 +123,28 @@ export function InvoicesView() {
     const file = input.files?.[0];
     input.value = "";
     if (!file) return;
-    const limitMb = field === "paymentQrDataUrl" ? QR_UPLOAD_MB : 1;
-    if (file.type !== "image/png" || file.size > limitMb * STORED_IMAGE_BYTES) { await showNotice(`Choose a PNG image no larger than ${limitMb} MB.`, "Unsupported image"); return; }
+    const isQr = field === "paymentQrDataUrl";
+    const limitMb = isQr ? QR_UPLOAD_MB : 1;
+    if (file.size > limitMb * STORED_IMAGE_BYTES) { await showNotice(`The image is larger than ${limitMb} MB. Choose a smaller file.`, "Image too large"); return; }
+    if (!isQr && file.type !== "image/png") { await showNotice("Choose a PNG file for the invoice logo.", "Unsupported image"); return; }
     setBrandingBusy(field);
+    let objectUrl: string | undefined;
     try {
-      const dataUrl = await readPng(file);
+      const type = isQr ? await paymentQrImageType(file) : file.type;
+      const source = file.slice(0, file.size, type);
+      objectUrl = URL.createObjectURL(source);
       const image = new Image();
-      image.src = dataUrl;
-      await image.decode();
-      await saveBranding(field, file.size > STORED_IMAGE_BYTES ? await compactPaymentQr(image) : dataUrl);
+      image.src = objectUrl;
+      try { await image.decode(); }
+      catch { throw new Error("This image could not be opened. Export a new copy and try again."); }
+      const storedImage = type === "image/png" && file.size <= STORED_IMAGE_BYTES ? await readPng(source) : await compactPaymentQr(image);
+      await saveBranding(field, storedImage);
     } catch (error) {
       await showNotice(error instanceof Error ? error.message : "The selected PNG could not be opened.", "Image upload failed");
-    } finally { setBrandingBusy(null); }
+    } finally {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      setBrandingBusy(null);
+    }
   };
 
   const send = async (invoice: Invoice) => {
@@ -164,7 +182,7 @@ export function InvoicesView() {
   return <>
     <section className="page-heading"><div><p className="eyebrow">Finance / Receivables</p><h1>Invoices</h1><p className="subheading">Generate accurate invoices directly from bookings, then send or print them.</p></div><button className="primary-button" type="button" onClick={() => setFormOpen(true)} disabled={!bookings.length}><Plus aria-hidden="true" /> New invoice</button></section>
     <section className="invoice-branding panel"><div className="invoice-branding-copy"><span className="eyebrow">Invoice branding</span><strong>{logoDataUrl ? "Your saved logo is active" : "Use your studio logo on every invoice"}</strong><small>PNG · Maximum 1 MB</small></div>{logoDataUrl && <img className="invoice-branding-preview" src={logoDataUrl} alt="Saved invoice logo preview" />}{logoDataUrl && <button className="secondary-button" type="button" disabled={Boolean(brandingBusy)} onClick={() => void saveBranding("logoDataUrl", null)}><Trash2 aria-hidden="true" /> Remove logo</button>}<input ref={fileRef} type="file" aria-label="Invoice logo" accept="image/png,.png" hidden onChange={(event) => void uploadBranding("logoDataUrl", event.currentTarget)} /><button className="secondary-button" type="button" disabled={Boolean(brandingBusy)} onClick={() => fileRef.current?.click()}><ImagePlus aria-hidden="true" />{brandingBusy === "logoDataUrl" ? "Saving…" : logoDataUrl ? "Change logo" : "Upload PNG logo"}</button></section>
-    <section className="invoice-branding panel" aria-label="Invoice payment QR"><div className="invoice-branding-copy"><strong>QR Ph payment</strong><small>Upload a reusable QR Ph from your bank or e-wallet. PNG · Up to {QR_UPLOAD_MB} MB.</small></div>{paymentQrDataUrl && <img className="invoice-branding-preview" src={paymentQrDataUrl} alt="Saved QR Ph payment code" />}{paymentQrDataUrl && <button className="secondary-button" type="button" disabled={Boolean(brandingBusy)} onClick={() => void saveBranding("paymentQrDataUrl", null)}><Trash2 aria-hidden="true" /> Remove QR</button>}<input ref={qrFileRef} type="file" aria-label="QR Ph payment code" accept="image/png,.png" hidden onChange={(event) => void uploadBranding("paymentQrDataUrl", event.currentTarget)} /><button className="secondary-button" type="button" disabled={Boolean(brandingBusy)} onClick={() => qrFileRef.current?.click()}><ImagePlus aria-hidden="true" />{brandingBusy === "paymentQrDataUrl" ? "Saving…" : paymentQrDataUrl ? "Change QR Ph" : "Upload QR Ph"}</button></section>
+    <section className="invoice-branding panel" aria-label="Invoice payment QR"><div className="invoice-branding-copy"><strong>QR Ph payment</strong><small>Upload a reusable QR Ph from your bank or e-wallet. PNG, JPG, or WebP · Up to {QR_UPLOAD_MB} MB.</small></div>{paymentQrDataUrl && <img className="invoice-branding-preview" src={paymentQrDataUrl} alt="Saved QR Ph payment code" />}{paymentQrDataUrl && <button className="secondary-button" type="button" disabled={Boolean(brandingBusy)} onClick={() => void saveBranding("paymentQrDataUrl", null)}><Trash2 aria-hidden="true" /> Remove QR</button>}<input ref={qrFileRef} type="file" aria-label="QR Ph payment code" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" hidden onChange={(event) => void uploadBranding("paymentQrDataUrl", event.currentTarget)} /><button className="secondary-button" type="button" disabled={Boolean(brandingBusy)} onClick={() => qrFileRef.current?.click()}><ImagePlus aria-hidden="true" />{brandingBusy === "paymentQrDataUrl" ? "Saving…" : paymentQrDataUrl ? "Change QR Ph" : "Upload QR Ph"}</button></section>
     <section className="invoice-maintenance panel"><div><p className="eyebrow">Invoice maintenance</p><strong>Keep invoices aligned with booking records</strong><small>Refreshing changes event details only. Financial values stay as issued.</small></div><div className="invoice-maintenance-actions"><button className="secondary-button" type="button" onClick={() => void refreshBookingDetails()} disabled={maintenanceBusy}><RefreshCw aria-hidden="true" /> Refresh invoice details</button><button className="secondary-button danger-button" type="button" onClick={() => { setAdminPassword(""); setMaintenanceError(""); setDeleteVoidsOpen(true); }} disabled={maintenanceBusy || voidCount === 0}><Trash2 aria-hidden="true" /> Delete void invoices ({voidCount})</button></div></section>
     <section className="invoice-metrics"><article className="metric-card"><span>Total invoices</span><strong>{invoices.length}</strong><small>Saved in this workspace</small></article><article className="metric-card"><span>Drafts</span><strong>{invoices.filter((invoice) => invoice.status === "DRAFT").length}</strong><small>Ready for review</small></article><article className="metric-card"><span>Sent and outstanding</span><strong>{peso(outstanding)}</strong><small>Linked booking payments reflected</small></article><article className="metric-card"><span>Overdue</span><strong>{invoices.filter((invoice) => statusOf(invoice) === "OVERDUE").length}</strong><small>Past the due date</small></article></section>
     <div className="invoice-email-setup"><Mail aria-hidden="true" /><span><strong>{emailReady ? `Sending from ${emailSender}` : "Connect the studio email to send invoices."}</strong> {emailReady ? "Invoices go directly through the connected Gmail account." : "Use salikhaprintco@gmail.com and approve Gmail send-only access."}</span>{!emailReady && <a className="secondary-button" href="/api/invoices/email/connect">Connect Gmail</a>}</div>
