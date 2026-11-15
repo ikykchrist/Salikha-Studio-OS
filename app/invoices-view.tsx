@@ -8,6 +8,8 @@ import { exportInvoicePage } from "../lib/invoice-export";
 
 type InvoiceLine = { description: string; quantity: number; unitPrice: number };
 type BrandingField = "logoDataUrl" | "paymentQrDataUrl";
+const STORED_IMAGE_BYTES = 1024 * 1024;
+const QR_UPLOAD_MB = 10;
 type Booking = { id: string; client_id: string; event_name: string; event_date: string | null; start_time: string | null; end_time: string | null; venue: string | null; total_amount: number; downpayment_amount: number; paid_amount: number; status: string; client_name: string; client_email: string | null; package_name: string | null };
 type BookingDetails = { eventName?: string | null; packageName?: string | null; eventDate?: string | null; startTime?: string | null; endTime?: string | null; venue?: string | null };
 type Invoice = { id: string; invoice_number: string; client_id: string; booking_id: string | null; issue_date: string; due_date: string | null; status: "DRAFT" | "SENT" | "PAID" | "VOID"; line_items: InvoiceLine[]; booking_details: BookingDetails; subtotal: number; discount_amount: number; tax_rate: number; tax_amount: number; total_amount: number; notes: string | null; terms: string | null; email_sent_to: string | null; sent_at: string | null; client_name: string; client_email: string | null; event_name: string | null; event_date: string | null; start_time: string | null; end_time: string | null; venue: string | null; package_name: string | null; booking_paid: number | null };
@@ -16,6 +18,34 @@ const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila" }
 const addDays = (value: string, days: number) => { const date = new Date(`${value}T12:00:00Z`); date.setUTCDate(date.getUTCDate() + days); return date.toISOString().slice(0, 10); };
 const dateLabel = (value: string | null) => value ? formatManilaDate(value, { month: "short", day: "numeric", year: "numeric" }) : "TBA";
 const timeLabel = (value: string | null | undefined) => value ? formatManilaTime(value) : "TBA";
+
+function readPng(file: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("The selected PNG could not be read."));
+    reader.onerror = () => reject(new Error("The selected PNG could not be read."));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function compactPaymentQr(image: HTMLImageElement) {
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d", { alpha: false });
+  if (!context) throw new Error("This browser could not prepare the QR Ph image.");
+  // Keep the encoded request and the invoice response within the hosting payload limit.
+  for (const maxSide of [1200, 900, 640, 480]) {
+    const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+    context.fillStyle = "white";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.imageSmoothingEnabled = false;
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const png = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/png"));
+    if (png && png.size <= STORED_IMAGE_BYTES) return readPng(png);
+  }
+  throw new Error("The QR Ph image could not be prepared. Choose a PNG with a clearly visible QR code.");
+}
 
 export function InvoicesView() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -85,18 +115,18 @@ export function InvoicesView() {
     const file = input.files?.[0];
     input.value = "";
     if (!file) return;
-    if (file.type !== "image/png" || file.size > 1024 * 1024) { await showNotice("Choose a PNG image no larger than 1 MB.", "Unsupported image"); return; }
-    const reader = new FileReader();
-    reader.onload = async () => {
-      if (typeof reader.result !== "string") return;
+    const limitMb = field === "paymentQrDataUrl" ? QR_UPLOAD_MB : 1;
+    if (file.type !== "image/png" || file.size > limitMb * STORED_IMAGE_BYTES) { await showNotice(`Choose a PNG image no larger than ${limitMb} MB.`, "Unsupported image"); return; }
+    setBrandingBusy(field);
+    try {
+      const dataUrl = await readPng(file);
       const image = new Image();
-      image.src = reader.result;
-      try { await image.decode(); }
-      catch { await showNotice("The selected PNG could not be opened.", "Image upload failed"); return; }
-      await saveBranding(field, reader.result);
-    };
-    reader.onerror = () => void showNotice("The selected PNG could not be read.", "Image upload failed");
-    reader.readAsDataURL(file);
+      image.src = dataUrl;
+      await image.decode();
+      await saveBranding(field, file.size > STORED_IMAGE_BYTES ? await compactPaymentQr(image) : dataUrl);
+    } catch (error) {
+      await showNotice(error instanceof Error ? error.message : "The selected PNG could not be opened.", "Image upload failed");
+    } finally { setBrandingBusy(null); }
   };
 
   const send = async (invoice: Invoice) => {
@@ -134,7 +164,7 @@ export function InvoicesView() {
   return <>
     <section className="page-heading"><div><p className="eyebrow">Finance / Receivables</p><h1>Invoices</h1><p className="subheading">Generate accurate invoices directly from bookings, then send or print them.</p></div><button className="primary-button" type="button" onClick={() => setFormOpen(true)} disabled={!bookings.length}><Plus aria-hidden="true" /> New invoice</button></section>
     <section className="invoice-branding panel"><div className="invoice-branding-copy"><span className="eyebrow">Invoice branding</span><strong>{logoDataUrl ? "Your saved logo is active" : "Use your studio logo on every invoice"}</strong><small>PNG · Maximum 1 MB</small></div>{logoDataUrl && <img className="invoice-branding-preview" src={logoDataUrl} alt="Saved invoice logo preview" />}{logoDataUrl && <button className="secondary-button" type="button" disabled={Boolean(brandingBusy)} onClick={() => void saveBranding("logoDataUrl", null)}><Trash2 aria-hidden="true" /> Remove logo</button>}<input ref={fileRef} type="file" aria-label="Invoice logo" accept="image/png,.png" hidden onChange={(event) => void uploadBranding("logoDataUrl", event.currentTarget)} /><button className="secondary-button" type="button" disabled={Boolean(brandingBusy)} onClick={() => fileRef.current?.click()}><ImagePlus aria-hidden="true" />{brandingBusy === "logoDataUrl" ? "Saving…" : logoDataUrl ? "Change logo" : "Upload PNG logo"}</button></section>
-    <section className="invoice-branding panel" aria-label="Invoice payment QR"><div className="invoice-branding-copy"><strong>QR Ph payment</strong><small>Upload a reusable QR Ph from your bank or e-wallet. PNG · Maximum 1 MB.</small></div>{paymentQrDataUrl && <img className="invoice-branding-preview" src={paymentQrDataUrl} alt="Saved QR Ph payment code" />}{paymentQrDataUrl && <button className="secondary-button" type="button" disabled={Boolean(brandingBusy)} onClick={() => void saveBranding("paymentQrDataUrl", null)}><Trash2 aria-hidden="true" /> Remove QR</button>}<input ref={qrFileRef} type="file" aria-label="QR Ph payment code" accept="image/png,.png" hidden onChange={(event) => void uploadBranding("paymentQrDataUrl", event.currentTarget)} /><button className="secondary-button" type="button" disabled={Boolean(brandingBusy)} onClick={() => qrFileRef.current?.click()}><ImagePlus aria-hidden="true" />{brandingBusy === "paymentQrDataUrl" ? "Saving…" : paymentQrDataUrl ? "Change QR Ph" : "Upload QR Ph"}</button></section>
+    <section className="invoice-branding panel" aria-label="Invoice payment QR"><div className="invoice-branding-copy"><strong>QR Ph payment</strong><small>Upload a reusable QR Ph from your bank or e-wallet. PNG · Up to {QR_UPLOAD_MB} MB.</small></div>{paymentQrDataUrl && <img className="invoice-branding-preview" src={paymentQrDataUrl} alt="Saved QR Ph payment code" />}{paymentQrDataUrl && <button className="secondary-button" type="button" disabled={Boolean(brandingBusy)} onClick={() => void saveBranding("paymentQrDataUrl", null)}><Trash2 aria-hidden="true" /> Remove QR</button>}<input ref={qrFileRef} type="file" aria-label="QR Ph payment code" accept="image/png,.png" hidden onChange={(event) => void uploadBranding("paymentQrDataUrl", event.currentTarget)} /><button className="secondary-button" type="button" disabled={Boolean(brandingBusy)} onClick={() => qrFileRef.current?.click()}><ImagePlus aria-hidden="true" />{brandingBusy === "paymentQrDataUrl" ? "Saving…" : paymentQrDataUrl ? "Change QR Ph" : "Upload QR Ph"}</button></section>
     <section className="invoice-maintenance panel"><div><p className="eyebrow">Invoice maintenance</p><strong>Keep invoices aligned with booking records</strong><small>Refreshing changes event details only. Financial values stay as issued.</small></div><div className="invoice-maintenance-actions"><button className="secondary-button" type="button" onClick={() => void refreshBookingDetails()} disabled={maintenanceBusy}><RefreshCw aria-hidden="true" /> Refresh invoice details</button><button className="secondary-button danger-button" type="button" onClick={() => { setAdminPassword(""); setMaintenanceError(""); setDeleteVoidsOpen(true); }} disabled={maintenanceBusy || voidCount === 0}><Trash2 aria-hidden="true" /> Delete void invoices ({voidCount})</button></div></section>
     <section className="invoice-metrics"><article className="metric-card"><span>Total invoices</span><strong>{invoices.length}</strong><small>Saved in this workspace</small></article><article className="metric-card"><span>Drafts</span><strong>{invoices.filter((invoice) => invoice.status === "DRAFT").length}</strong><small>Ready for review</small></article><article className="metric-card"><span>Sent and outstanding</span><strong>{peso(outstanding)}</strong><small>Linked booking payments reflected</small></article><article className="metric-card"><span>Overdue</span><strong>{invoices.filter((invoice) => statusOf(invoice) === "OVERDUE").length}</strong><small>Past the due date</small></article></section>
     <div className="invoice-email-setup"><Mail aria-hidden="true" /><span><strong>{emailReady ? `Sending from ${emailSender}` : "Connect the studio email to send invoices."}</strong> {emailReady ? "Invoices go directly through the connected Gmail account." : "Use salikhaprintco@gmail.com and approve Gmail send-only access."}</span>{!emailReady && <a className="secondary-button" href="/api/invoices/email/connect">Connect Gmail</a>}</div>
