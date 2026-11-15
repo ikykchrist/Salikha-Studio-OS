@@ -3,11 +3,14 @@
 import { useEffect, useState } from "react";
 import { MapPin, ShieldCheck, X } from "lucide-react";
 import { showConfirm, showNotice } from "../lib/ui-dialogs";
+import { getLocalDatabase } from "../lib/local-database";
+import { money, todayManila } from "../lib/workflow-validation";
 
 type BookingRecord = { id: string; client: string; eventName: string; date: string; startTime: string; endTime: string; venue: string; mapsUrl?: string; packageId?: string | null; packageName: string; addonIds?: string[]; total: number; paidAmount?: number; downpaymentAmount?: number; status: "PENDING" | "DONE" | "CANCELLED"; preparation: { layoutReady: boolean; venueReady: boolean; backdropColor: string | null } };
 type PackageOption = { id: string; name: string; base_price: number; duration: string | null; inclusions: string | null; is_active: boolean };
+type DownpaymentInput = { amount: string; accountId: string; date: string; reference: string };
 
-export function BookingEditForm({ booking, onClose, onSave }: { booking: BookingRecord; onClose: () => void; onSave: (booking: BookingRecord) => void | Promise<void> }) {
+export function BookingEditForm({ booking, onClose, onSave }: { booking: BookingRecord; onClose: () => void; onSave: (booking: BookingRecord, downpayment?: DownpaymentInput) => void | Promise<void> }) {
   const [eventName, setEventName] = useState(booking.eventName);
   const [date, setDate] = useState(booking.date);
   const [startTime, setStartTime] = useState(booking.startTime);
@@ -25,12 +28,35 @@ export function BookingEditForm({ booking, onClose, onSave }: { booking: Booking
   const [recipeCost, setRecipeCost] = useState<number | null>(null);
   const [total, setTotal] = useState(String(booking.total));
   const [status, setStatus] = useState(booking.status);
+  const [deposit, setDeposit] = useState("");
+  const [paymentAccountId, setPaymentAccountId] = useState("");
+  const [paymentDate, setPaymentDate] = useState(todayManila);
+  const [paymentReference, setPaymentReference] = useState("");
+  const [paymentAccounts, setPaymentAccounts] = useState<Array<{ id: string; name: string }> | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [overrideOpen, setOverrideOpen] = useState(false);
   const [adminPassword, setAdminPassword] = useState("");
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const paid = Number(booking.paidAmount || 0);
+  const recordedDeposit = Number(booking.downpaymentAmount || 0);
+  const canRecordDeposit = booking.status === "PENDING" && status !== "CANCELLED" && recordedDeposit === 0;
+  const newDeposit = canRecordDeposit ? Number(deposit) : 0;
+  const outstanding = Math.max(0, Math.round(Number(total) * 100 - paid * 100) / 100);
+  const needsPaymentDetails = newDeposit > 0;
+  useEffect(() => {
+    if (!needsPaymentDetails) return;
+    let cancelled = false;
+    setPaymentAccounts(null);
+    void (async () => {
+      try {
+        const { data, error } = await getLocalDatabase().from("cash_accounts").select("id,name").eq("is_active", true).order("name");
+        if (!cancelled) setPaymentAccounts(error ? [] : data || []);
+      } catch { if (!cancelled) setPaymentAccounts([]); }
+    })();
+    return () => { cancelled = true; };
+  }, [needsPaymentDetails]);
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -81,10 +107,12 @@ export function BookingEditForm({ booking, onClose, onSave }: { booking: Booking
   }, [packageId]);
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault(); setError("");
-    if (!eventName.trim() || !Number.isFinite(Number(total)) || Number(total) < Number(booking.paidAmount || 0)) { setError("Enter an event and total at least as much as payments already received."); return; }
+    if (saving) return;
+    if (!eventName.trim() || !Number.isFinite(Number(total)) || Number(total) < paid) { setError("Enter an event and total at least as much as payments already received."); return; }
+    if (needsPaymentDetails && (newDeposit > outstanding || !paymentDate || !paymentAccounts?.some(account => account.id === paymentAccountId))) { setError("Enter a downpayment within the balance, the receiving account and actual payment date."); return; }
     if (packageLoadError || !packages.length && packageId || addonError || addonLoading) { setError(addonError || "Package add-ons could not be verified. Retry before saving."); return; }
     setSaving(true);
-    try { await onSave({ ...booking, eventName: eventName.trim(), date, startTime, endTime, venue: venue.trim(), mapsUrl: mapsUrl.trim(), packageId: packageId || null, packageName: chosenPackage?.name || (packageId ? booking.packageName : "Custom service"), addonIds: selectedAddonIds, total: Number(total), status }); }
+    try { await onSave({ ...booking, eventName: eventName.trim(), date, startTime, endTime, venue: venue.trim(), mapsUrl: mapsUrl.trim(), packageId: packageId || null, packageName: chosenPackage?.name || (packageId ? booking.packageName : "Custom service"), addonIds: selectedAddonIds, total: Number(total), status }, needsPaymentDetails ? { amount: deposit, accountId: paymentAccountId, date: paymentDate, reference: paymentReference } : undefined); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Could not save booking."); }
     finally { setSaving(false); }
   };
@@ -129,10 +157,19 @@ export function BookingEditForm({ booking, onClose, onSave }: { booking: Booking
         {packageLoadError && <p className="form-warning" role="alert">{packageLoadError}</p>}
         {chosenPackage && <div className="workflow-callout"><strong>{chosenPackage.name}</strong><small>{chosenPackage.duration || "Duration not set"} · {chosenPackage.inclusions || "No inclusions listed"}</small>{recipeCost !== null && <small>Recipe cost: ₱{recipeCost.toLocaleString("en-PH", { minimumFractionDigits: 2 })} · Estimated profit: ₱{(Number(total) - recipeCost).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</small>}{packageChanged && <small>Package changed. Review the booking total below before saving.</small>}</div>}
         <label>Total<div className="money-input"><span>₱</span><input type="number" min={booking.paidAmount || 0} step="0.01" value={total} onChange={(event) => setTotal(event.target.value)} required /></div></label>
-        <div className="workflow-callout"><strong>Downpayment: ₱{Number(booking.downpaymentAmount || 0).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</strong><small>Remaining balance: ₱{Math.max(0,Number(total)-Number(booking.paidAmount || 0)).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</small>Recorded payments: ₱{Number(booking.paidAmount || 0).toLocaleString("en-PH", { minimumFractionDigits: 2 })}<small>Payments are recorded in Collect payment or Cashflow. Completing an event requires full payment and does not create a receipt.</small></div>
+        <div className="workflow-callout"><strong>Downpayment recorded · {money(recordedDeposit)}</strong><small>Total payments recorded · {money(paid)}</small><small>{needsPaymentDetails ? "Balance after downpayment" : "Remaining balance"} · {money(Math.max(0,outstanding-newDeposit))}</small>{recordedDeposit>0&&<small>To correct a receipt, void it in Cashflow and record the corrected downpayment here.</small>}</div>
+        {canRecordDeposit&&<>
+          <label>Downpayment received (PHP)<input type="number" min="0" max={outstanding} step="0.01" value={deposit} onChange={event=>setDeposit(event.target.value)} placeholder="Amount actually received" disabled={saving}/></label>
+          {needsPaymentDetails&&<>
+            <label>Receiving account<select required value={paymentAccountId} onChange={event=>setPaymentAccountId(event.target.value)} disabled={saving||!paymentAccounts?.length}><option value="">{paymentAccounts===null ? "Loading accounts…" : "Choose receiving account"}</option>{paymentAccounts?.map(account=><option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
+            <label>Actual payment date<input type="date" required value={paymentDate} onChange={event=>setPaymentDate(event.target.value)} disabled={saving}/></label>
+            <label>Payment reference<input value={paymentReference} onChange={event=>setPaymentReference(event.target.value)} maxLength={250} placeholder="Optional" disabled={saving}/></label>
+            {paymentAccounts?.length===0&&<p className="form-warning wide-field" role="alert">No active receiving account available. Check Cashflow or clear the downpayment to save only the booking details.</p>}
+          </>}
+        </>}
         <label>Status<select value={status} onChange={(event) => setStatus(event.target.value as BookingRecord["status"])}><option value="PENDING">Pending</option><option value="DONE">Done</option><option value="CANCELLED">Cancelled</option></select></label>
       </div>{error && <p className="form-warning" role="alert">{error}</p>}</div></div>
-      <div className="drawer-footer"><button className="secondary-button danger-button" type="button" onClick={() => void deleteBooking()} disabled={saving || deleteBusy}>{deleteBusy ? "Deleting…" : "Delete booking"}</button><button className="secondary-button" type="button" onClick={onClose} disabled={saving || deleteBusy}>Cancel</button><button className="primary-button" type="submit" disabled={saving || deleteBusy}>{saving ? "Saving…" : "Save changes"}</button></div>
+      <div className="drawer-footer"><button className="secondary-button danger-button" type="button" onClick={() => void deleteBooking()} disabled={saving || deleteBusy}>{deleteBusy ? "Deleting…" : "Delete booking"}</button><button className="secondary-button" type="button" onClick={onClose} disabled={saving || deleteBusy}>Cancel</button><button className="primary-button" type="submit" disabled={saving || deleteBusy || needsPaymentDetails&&!paymentAccounts?.length}>{saving ? "Saving…" : needsPaymentDetails ? "Save changes & downpayment" : "Save changes"}</button></div>
     </form>
   </div>{overrideOpen && <div className="booking-overlay admin-override-overlay" role="dialog" aria-modal="true" aria-labelledby="booking-override-title"><section className="admin-override-dialog"><button className="close-button" type="button" onClick={() => { setOverrideOpen(false); setAdminPassword(""); setDeleteError(""); }} disabled={deleteBusy} aria-label="Cancel permanent deletion"><X aria-hidden="true" /></button><div className="admin-override-icon"><MapPin aria-hidden="true" /></div><p className="eyebrow">Administrator authorization</p><h2 id="booking-override-title">Linked records will be deleted</h2><p>This permanently removes this booking’s payments, linked expenses, cash entries, calendar record, and usage history. Inventory used for this booking will be restored.</p><label>Admin password<input autoFocus type="password" autoComplete="current-password" value={adminPassword} onChange={(event) => setAdminPassword(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void confirmOverride(); } }} aria-invalid={Boolean(deleteError)} /></label>{deleteError && <p className="form-warning" role="alert">{deleteError}</p>}<div className="admin-override-actions"><button className="secondary-button" type="button" onClick={() => { setOverrideOpen(false); setAdminPassword(""); setDeleteError(""); }} disabled={deleteBusy}>Keep booking</button><button className="app-dialog-danger-button" type="button" onClick={() => void confirmOverride()} disabled={deleteBusy || !adminPassword}>{deleteBusy ? "Verifying…" : "Verify & permanently delete"}</button></div></section></div>}</>;
 }

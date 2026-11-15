@@ -5,6 +5,7 @@ import { getLocalPostgresPool } from '../../../lib/local-postgres';
 import { cents,uuid,validDate } from '../../../lib/workflow-validation';
 import { validBookingSchedule, hasCompleteBookingSchedule } from '../../../lib/booking-schedule';
 import { ensureBookingTbaSchema } from '../../../lib/ensure-booking-tba-schema';
+import { postBookingDownpayment } from '../../../lib/booking-downpayment';
 export const runtime='nodejs';
 export async function POST(request:Request){
  const auth=await requireUser(request);if(auth.response)return auth.response;
@@ -31,9 +32,7 @@ export async function POST(request:Request){
  if(addonSnapshot.length){const column=await db.query("select 1 from information_schema.columns where table_schema='public' and table_name='bookings' and column_name='addons_snapshot'");if(!column.rowCount)await db.query("alter table public.bookings add column if not exists addons_snapshot jsonb not null default '[]'::jsonb");}
  const saved=await db.query(`insert into public.bookings(id,client_id,package_id,event_name,event_date,start_time,end_time,venue,maps_url,total_amount,transport_amount,addons_amount,downpayment_amount,paid_amount,notes,created_by${addonSnapshot.length?',addons_snapshot':''}) values($1,$2,$3,$4,nullif($5,'')::date,nullif($6,'')::time,nullif($7,'')::time,$8,$9,$10,$11,$12,$13,$13,$14,$15${addonSnapshot.length?',$16::jsonb':''}) returning id,status,paid_amount as "paidAmount",downpayment_amount as "downpaymentAmount"`,[b.id,b.clientId,b.packageId||null,b.eventName,b.date||'',b.startTime||'',b.endTime||'',b.venue||null,b.mapsUrl||null,total/100,transport/100,addonAmount/100,deposit/100,b.notes||null,auth.user!.id,...(addonSnapshot.length?[JSON.stringify(addonSnapshot)]:[])]);
  if(deposit>0){
-  const reference=`booking-deposit:${b.id}`;
-  await db.query(`insert into public.cash_transactions(account_id,transaction_date,type,description,amount,direction,status,reference,created_by,purpose,booking_id,external_reference) values($1,$2,'BOOKING_RECEIPT',$3,$4,'INFLOW','POSTED',$5,$6,'BOOKING_RECEIPT',$7,$8)`,[account.id,b.paymentDate,`Downpayment - ${String(b.eventName).trim()}`,deposit/100,reference,auth.user!.id,b.id,String(b.paymentReference||'').trim().slice(0,250)||null]);
-  await db.query('insert into public.payments(booking_id,amount,payment_date,method,reference,created_by) values($1,$2,$3,$4,$5,$6)',[b.id,deposit/100,b.paymentDate,account.name,reference,auth.user!.id]);
+  await postBookingDownpayment(db,{bookingId:b.id,eventName:String(b.eventName).trim(),amount:deposit/100,date:b.paymentDate,account,reference:`booking-deposit:${b.id}`,externalReference:String(b.paymentReference||''),actorId:auth.user!.id});
  }
  await db.query("insert into public.audit_logs(actor_id,action,entity_type,entity_id,metadata) values($1,'BOOKING_CREATE','bookings',$2,$3::jsonb)",[auth.user!.id,b.id,JSON.stringify({packageId:b.packageId||null,addonSnapshot,total:total/100})]);await db.query('commit'); const scheduleTba=!hasCompleteBookingSchedule(b.date,b.startTime,b.endTime); if(googleCalendarConfigured()) after(async()=>{try{await syncGoogleCalendar(b.id);}catch{console.error('Calendar sync deferred; retry from Calendar.');}}); return Response.json({booking:saved.rows[0],calendarSync:{queued:googleCalendarConfigured(),scheduleTba,requestedAt:new Date().toISOString()}});
  }catch(e){await db.query('rollback').catch(()=>{});return Response.json({error:e instanceof Error?e.message:'Could not create booking.'},{status:400});}finally{db.release();}

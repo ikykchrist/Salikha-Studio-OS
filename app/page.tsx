@@ -352,13 +352,13 @@ function BookingsView({ isAdmin, showForm, onShowForm, onNavigate }: { isAdmin: 
       booking = { ...booking, id: result.booking.id, status: result.booking.status, paidAmount: Number(result.booking.paidAmount), downpaymentAmount: Number(result.booking.downpaymentAmount) };
       setBookings((current) => { const next = [booking, ...current]; window.localStorage.setItem("salikha-bookings", JSON.stringify(next)); return next; }); onShowForm(false); showToast(Number(booking.downpaymentAmount)>0?"Booking saved. Downpayment recorded in Cashflow.":"Booking saved. No downpayment recorded.");
     }} />}
-    {editingBooking && <BookingEditForm booking={editingBooking} onClose={() => setEditingBooking(null)} onSave={async (updated) => {
-      const response = await fetch("/api/booking-update", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: updated.id, eventName: updated.eventName, date: updated.date, startTime: updated.startTime, endTime: updated.endTime, venue: updated.venue, mapsUrl: updated.mapsUrl, packageId: updated.packageId || null, addonIds: updated.addonIds || [], total: updated.total, downpaymentAmount: updated.downpaymentAmount ?? 0, status: updated.status }) });
+    {editingBooking && <BookingEditForm booking={editingBooking} onClose={() => setEditingBooking(null)} onSave={async (updated, downpayment) => {
+      const response = await fetch("/api/booking-update", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: updated.id, eventName: updated.eventName, date: updated.date, startTime: updated.startTime, endTime: updated.endTime, venue: updated.venue, mapsUrl: updated.mapsUrl, packageId: updated.packageId || null, addonIds: updated.addonIds || [], total: updated.total, downpayment, status: updated.status }) });
       const result = await response.json(); if (!response.ok) throw new Error(result.error || "Could not save booking.");
       updated = { ...updated, paidAmount: Number(result.booking.paidAmount), downpaymentAmount: Number(result.booking.downpaymentAmount) };
       void notifyBookingSync(updated.id,result.calendarSync);
       applySavedBooking(updated,updated.status === "DONE" && editingBooking.status !== "DONE");
-      showToast("Booking updated.");
+      showToast(downpayment ? "Booking updated. Downpayment recorded in Cashflow." : "Booking updated.");
     }} />}
     {profitBookingId&&<EventProfit bookingId={profitBookingId} onClose={()=>setProfitBookingId(null)}/>}
     {paymentBooking && <MoneyActionForm action="RECEIPT" bookingId={paymentBooking.id} onClose={() => setPaymentBooking(null)} onSaved={() => setBookingRevision(r => r + 1)} />}

@@ -9,6 +9,10 @@ export type TelegramBookingDraft = {
   venue: string;
   packageName: string;
   total: number | null;
+  downpayment: string;
+  paymentDate: string;
+  paymentAccount: string;
+  paymentReference: string;
   statedBalance: number | null;
   celebrant: string;
   theme: string;
@@ -22,7 +26,7 @@ export type TelegramBookingDraft = {
 
 const field = (text: string, labels: string[]) => {
   for (const label of labels) {
-    const match = text.match(new RegExp(`^\\s*(?:${label})\\s*:\\s*(.+?)\\s*$`, "im"));
+    const match = text.match(new RegExp(`^[ \\t]*(?:${label})[ \\t]*:[ \\t]*([^\\r\\n]*?)\\s*$`, "im"));
     if (match?.[1]) return match[1].trim();
   }
   return "";
@@ -35,13 +39,16 @@ const amount = (value: string) => {
 const dateValue = (value: string) => {
   if (!value) return "";
   const cleaned = value.replace(/\([^)]*\)/g, "").trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(cleaned)) return cleaned;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(cleaned)) {
+    const date = new Date(`${cleaned}T12:00:00Z`);
+    return Number.isFinite(date.getTime()) && date.toISOString().slice(0,10) === cleaned ? cleaned : "";
+  }
   const match = cleaned.match(/^(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),?\s+(\d{4})$/i);
   if (!match) return "";
   const month = ["january","february","march","april","may","june","july","august","september","october","november","december"].indexOf(match[1].toLowerCase()) + 1;
   const iso = `${match[3]}-${String(month).padStart(2,"0")}-${match[2].padStart(2,"0")}`;
   const date = new Date(`${iso}T12:00:00Z`);
-  return date.toISOString().slice(0,10) === iso ? iso : "";
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0,10) === iso ? iso : "";
 };
 const clock = (value: string) => {
   const match = value.trim().match(/^(\d{1,2})(?::([0-5]\d))?\s*(am|pm)$/i);
@@ -57,7 +64,7 @@ const timeRange = (value: string) => {
 
 export function parseTelegramBooking(text: string): TelegramBookingDraft {
   const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
-  const packageLine = lines.find(line => /^(?!name|date|time|venue|balance|client|contact|phone|mobile|email|price|total|estimated|design|celebrant|template|backdrop|add-?ons?|other)[^:]{2,60}:\s*₱?\s*[\d,]+(?:\.\d{1,2})?$/i.test(line)) || "";
+  const packageLine = lines.find(line => /^(?!name|date|time|venue|balance|client|contact|phone|mobile|email|price|total|estimated|design|celebrant|template|backdrop|add-?ons?|other|downpayment|payment)[^:]{2,60}:\s*₱?\s*[\d,]+(?:\.\d{1,2})?$/i.test(line)) || "";
   const [startTime,endTime] = timeRange(field(text,["time","event time"]));
   return {
     clientName: field(text,["client name","contact name","booked by","parent name"]),
@@ -69,6 +76,10 @@ export function parseTelegramBooking(text: string): TelegramBookingDraft {
     venue: field(text,["venue address","venue","location"]),
     packageName: packageLine ? packageLine.split(":")[0].trim() : field(text,["package","service"]),
     total: amount(packageLine ? packageLine.split(":").slice(1).join(":") : field(text,["total price","package price","price","total"])),
+    downpayment: field(text,["downpayment received","downpayment"]),
+    paymentDate: dateValue(field(text,["payment date"])),
+    paymentAccount: field(text,["payment account"]),
+    paymentReference: field(text,["payment reference"]),
     statedBalance: amount(field(text,["balance","remaining balance"])),
     celebrant: field(text,["name of the celebrant","celebrant"]),
     theme: field(text,["design theme","theme"]),
@@ -81,23 +92,38 @@ export function parseTelegramBooking(text: string): TelegramBookingDraft {
   };
 }
 
+export function telegramDownpaymentAmount(draft: TelegramBookingDraft) {
+  return draft.downpayment ? amount(draft.downpayment) : 0;
+}
+
 export function missingTelegramFields(draft: TelegramBookingDraft) {
   const missing: string[] = [];
   if (!draft.clientName) missing.push("client name");
   if (!draft.eventName) missing.push("event name");
   if (draft.total === null) missing.push("package price / total");
+  const deposit = telegramDownpaymentAmount(draft);
+  if (deposit === null || deposit > 999_999_999.99) missing.push("valid downpayment amount (or 0)");
+  else if (deposit > 0) {
+    if (draft.total !== null && deposit > draft.total) missing.push("downpayment at or below the booking price");
+    if (!draft.paymentDate) missing.push("actual payment date");
+    if (!draft.paymentAccount) missing.push("receiving account name");
+  }
   return missing;
 }
 
 export function telegramDraftPreview(draft: TelegramBookingDraft) {
   const money = (value: number | null) => value === null ? "TBA" : `₱${value.toLocaleString("en-PH",{minimumFractionDigits:2})}`;
-  const implied = draft.total !== null && draft.statedBalance !== null ? draft.total - draft.statedBalance : null;
+  const deposit = telegramDownpaymentAmount(draft);
   return [
     "📋 Booking draft — review before saving",
     `Client: ${draft.clientName || "MISSING — send: client <name>"}`,
     `Event: ${draft.eventName || "MISSING"}`,
     `Package: ${draft.packageName || "Custom service"}`,
     `Price: ${money(draft.total)}`,
+    draft.downpayment ? `Downpayment received: ${deposit === null ? "Invalid amount" : money(deposit)}` : "",
+    deposit !== null && deposit > 0 ? `Payment date: ${draft.paymentDate || "MISSING"} · Account: ${draft.paymentAccount || "MISSING"}` : "",
+    deposit !== null && deposit > 0 && draft.paymentReference ? `Payment reference: ${draft.paymentReference}` : "",
+    deposit !== null && deposit > 0 && draft.total !== null && deposit <= draft.total ? `Balance after downpayment: ${money(draft.total - deposit)}` : "",
     `Date: ${draft.date || "TBA"}`,
     `Time: ${draft.startTime && draft.endTime ? `${draft.startTime}–${draft.endTime}` : "TBA"}`,
     `Venue: ${draft.venue || "TBA"}`,
@@ -111,7 +137,7 @@ export function telegramDraftPreview(draft: TelegramBookingDraft) {
     draft.otherRequests ? `Other requests: ${draft.otherRequests}` : "",
     draft.email ? `Email: ${draft.email}` : "",
     draft.statedBalance !== null ? `Balance stated in message: ${money(draft.statedBalance)}` : "",
-    implied !== null && implied >= 0 ? `Implied payment: ${money(implied)} — NOT posted to Cashflow; verify in the app.` : "",
+    deposit !== null && deposit > 0 ? "Confirm only after verifying the payment. Confirmation records it in Cashflow." : "",
     "No booking is saved until you tap Confirm. Send `client <name>` or `edit <field> <value>` to correct this draft.",
   ].filter(Boolean).join("\n");
 }

@@ -4,10 +4,12 @@ import { getLocalPostgresPool } from "../../../../lib/local-postgres";
 import { ensureTelegramSchema } from "../../../../lib/ensure-telegram-schema";
 import { ensureBookingTbaSchema } from "../../../../lib/ensure-booking-tba-schema";
 import { googleCalendarConfigured, syncGoogleCalendar } from "../../../../lib/google-calendar";
-import { missingTelegramFields, parseTelegramBooking, telegramDraftPreview, type TelegramBookingDraft } from "../../../../lib/telegram-booking";
+import { missingTelegramFields, parseTelegramBooking, telegramDownpaymentAmount, telegramDraftPreview, type TelegramBookingDraft } from "../../../../lib/telegram-booking";
 import { sendTelegramMessage, telegramApi, telegramWebhookSecret } from "../../../../lib/telegram-api";
 import { validBookingSchedule } from "../../../../lib/booking-schedule";
 import { extractTelegramBooking } from "../../../../lib/telegram-gemini";
+import { postBookingDownpayment } from "../../../../lib/booking-downpayment";
+import { money, validDate } from "../../../../lib/workflow-validation";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -17,7 +19,7 @@ const allowed = async (id: number) => {
   const result=await getLocalPostgresPool().query("select 1 from public.telegram_allowed_users where telegram_user_id=$1",[id]);
   return Boolean(result.rowCount);
 };
-const buttons = (id: string, ready: boolean) => ready ? [[{text:"✅ Confirm booking",callback_data:`confirm:${id}`},{text:"Cancel",callback_data:`cancel:${id}`}]] : [[{text:"Cancel draft",callback_data:`cancel:${id}`}]];
+const buttons = (id: string, ready: boolean, hasPayment: boolean) => ready ? [[{text:hasPayment?"✅ Confirm booking & payment":"✅ Confirm booking",callback_data:`confirm:${id}`},{text:"Cancel",callback_data:`cancel:${id}`}]] : [[{text:"Cancel draft",callback_data:`cancel:${id}`}]];
 const uuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 
 async function latestDraft(userId: number) {
@@ -26,14 +28,14 @@ async function latestDraft(userId: number) {
 }
 async function preview(chatId:number,id:string,draft:TelegramBookingDraft) {
   const missing=missingTelegramFields(draft);
-  await sendTelegramMessage(chatId,telegramDraftPreview(draft)+(missing.length?`\n\nRequired before confirmation: ${missing.join(", ")}`:""),buttons(id,missing.length===0));
+  await sendTelegramMessage(chatId,telegramDraftPreview(draft)+(missing.length?`\n\nRequired before confirmation: ${missing.join(", ")}`:""),buttons(id,missing.length===0,(telegramDownpaymentAmount(draft)??0)>0));
 }
 async function editDraft(chatId:number,userId:number,text:string) {
   const current=await latestDraft(userId);
   if(!current){await sendTelegramMessage(chatId,"No open draft. Paste a client booking form first.");return;}
   const draft={...current.parsed};
   const client=text.match(/^\/?client\s+([\s\S]+)$/i);
-  const edit=text.match(/^\/?edit\s+(client|event|date|time|venue|package|price|phone|email|balance|theme|guests|addons|template|backdrop|requests)\s+([\s\S]+)$/i);
+  const edit=text.match(/^\/?edit\s+(client|event|date|time|venue|package|price|phone|email|balance|theme|guests|addons|template|backdrop|requests|downpayment|payment date|payment account|payment reference)\s+([\s\S]+)$/i);
   if(client) draft.clientName=client[1].trim();
   else if(edit){
     const value=edit[2].trim();
@@ -49,6 +51,10 @@ async function editDraft(chatId:number,userId:number,text:string) {
       case "phone": draft.phone=value; break;
       case "email": draft.email=value; break;
       case "balance": draft.statedBalance=parsed.statedBalance; if(draft.statedBalance===null)throw Error("Use a balance like 5000."); break;
+      case "downpayment": draft.downpayment=parsed.downpayment; break;
+      case "payment date": draft.paymentDate=parsed.paymentDate; break;
+      case "payment account": draft.paymentAccount=parsed.paymentAccount; break;
+      case "payment reference": draft.paymentReference=parsed.paymentReference; break;
       case "theme": draft.theme=value; break;
       case "guests": draft.guestCount=value; break;
       case "addons": draft.addons=value; break;
@@ -63,6 +69,8 @@ async function editDraft(chatId:number,userId:number,text:string) {
 async function confirmDraft(chatId:number,userId:number,id:string,override:boolean) {
   const db=await getLocalPostgresPool().connect();
   let bookingId:string|undefined;
+  let deposit=0;
+  let total=0;
   try{
     await db.query("begin");
     await ensureBookingTbaSchema(db);
@@ -75,22 +83,35 @@ async function confirmDraft(chatId:number,userId:number,id:string,override:boole
     const missing=missingTelegramFields(draft);
     if(missing.length){await db.query("rollback");return `Still missing: ${missing.join(", ")}. Edit the draft first.`;}
     if(!validBookingSchedule(draft.date,draft.startTime,draft.endTime) || draft.total===null || draft.total<0 || !Number.isFinite(draft.total)) {await db.query("rollback");return "The date, time, or price is invalid. Edit the draft first.";}
+    deposit=telegramDownpaymentAmount(draft)??0;
+    total=draft.total;
     const clients=await db.query("select id from public.clients where lower(trim(display_name))=lower($1) order by created_at limit 2",[draft.clientName]);
     if(clients.rowCount && clients.rowCount>1){await db.query("rollback");return "Several clients have that exact name. Resolve the duplicate in Clients before confirming.";}
     const existing=await db.query("select id,event_name from public.bookings where lower(trim(event_name))=lower($1) and event_date is not distinct from nullif($2,'')::date and status not in ('CANCELLED','ARCHIVED') limit 1",[draft.eventName,draft.date]);
     const overlap=draft.date&&draft.startTime&&draft.endTime?await db.query("select id,event_name from public.bookings where event_date=$1::date and start_time<$3::time and end_time>$2::time and status not in ('CANCELLED','ARCHIVED') limit 1",[draft.date,draft.startTime,draft.endTime]):{rows:[]};
-    if(!override&&(existing.rows[0]||overlap.rows[0])){await db.query("rollback");const other=existing.rows[0]||overlap.rows[0];return {text:`⚠️ Possible ${existing.rows[0]?"duplicate booking":"schedule overlap"}: ${other.event_name}. Review before saving.`,buttons:[[{text:"Save anyway",callback_data:`override:${id}`},{text:"Cancel",callback_data:`cancel:${id}`}]]};}
+    if(!override&&(existing.rows[0]||overlap.rows[0])){await db.query("rollback");const other=existing.rows[0]||overlap.rows[0];return {text:`⚠️ Possible ${existing.rows[0]?"duplicate booking":"schedule overlap"}: ${other.event_name}. Review before saving.`,buttons:[[{text:deposit?"Save booking & payment anyway":"Save anyway",callback_data:`override:${id}`},{text:"Cancel",callback_data:`cancel:${id}`}]]};}
+    let account: { id: string; name: string } | undefined;
+    if(deposit>0){
+      const accounts=await db.query<{id:string;name:string}>("select id,name from public.cash_accounts where lower(trim(name))=lower($1) and is_active order by id limit 2 for update",[draft.paymentAccount]);
+      if(accounts.rows.length!==1||!validDate(draft.paymentDate)){
+        await db.query("rollback");
+        return "Choose one active Cashflow account by its exact name (edit payment account GCash) and an actual payment date (edit payment date YYYY-MM-DD).";
+      }
+      account=accounts.rows[0];
+    }
     const clientId=clients.rows[0]?.id||(await db.query("insert into public.clients(display_name,phone,email) values($1,$2,$3) returning id",[draft.clientName,draft.phone||null,draft.email||null])).rows[0].id;
     const packageRow=draft.packageName?(await db.query("select id,name from public.service_packages where lower(trim(name))=lower($1) and is_active=true limit 1",[draft.packageName])).rows[0]:null;
-    const notes=["Telegram booking intake",`Original client form:\n${row.source_text}`,"Confirmed draft details:",draft.packageName&&!packageRow?`Requested package: ${draft.packageName} (not matched to catalog)`:"",draft.email?`Email: ${draft.email}`:"",draft.phone?`Phone: ${draft.phone}`:"",draft.addons?`Add-ons requested: ${draft.addons}`:"",draft.templateNumber?`Template number: ${draft.templateNumber}`:"",draft.backdropColor?`Backdrop color: ${draft.backdropColor}`:"",draft.otherRequests?`Other requests: ${draft.otherRequests}`:"",draft.celebrant?`Celebrant: ${draft.celebrant}`:"",draft.theme?`Design theme: ${draft.theme}`:"",draft.guestCount?`Estimated guests: ${draft.guestCount}`:"",draft.celebrantPhoto?`Celebrant photo: ${draft.celebrantPhoto}`:"",draft.statedBalance!==null?`Client-stated balance: ₱${draft.statedBalance.toFixed(2)}; payment not verified or posted.`:""].filter(Boolean).join("\n");
-    const saved=await db.query("insert into public.bookings(client_id,package_id,event_name,event_date,start_time,end_time,venue,total_amount,notes,preparation_backdrop_color) values($1,$2,$3,nullif($4,'')::date,nullif($5,'')::time,nullif($6,'')::time,$7,$8,$9,$10) returning id",[clientId,packageRow?.id||null,draft.eventName,draft.date,draft.startTime,draft.endTime,draft.venue||null,draft.total,notes,draft.backdropColor?.slice(0,80)||null]);
+    const notes=["Telegram booking intake",`Original client form:\n${row.source_text}`,"Confirmed draft details:",draft.packageName&&!packageRow?`Requested package: ${draft.packageName} (not matched to catalog)`:"",draft.email?`Email: ${draft.email}`:"",draft.phone?`Phone: ${draft.phone}`:"",draft.addons?`Add-ons requested: ${draft.addons}`:"",draft.templateNumber?`Template number: ${draft.templateNumber}`:"",draft.backdropColor?`Backdrop color: ${draft.backdropColor}`:"",draft.otherRequests?`Other requests: ${draft.otherRequests}`:"",draft.celebrant?`Celebrant: ${draft.celebrant}`:"",draft.theme?`Design theme: ${draft.theme}`:"",draft.guestCount?`Estimated guests: ${draft.guestCount}`:"",draft.celebrantPhoto?`Celebrant photo: ${draft.celebrantPhoto}`:"",draft.statedBalance!==null?`Client-stated balance: ₱${draft.statedBalance.toFixed(2)}; booking balance uses recorded payments.`:""].filter(Boolean).join("\n");
+    const saved=await db.query("insert into public.bookings(client_id,package_id,event_name,event_date,start_time,end_time,venue,total_amount,notes,preparation_backdrop_color,downpayment_amount,paid_amount) values($1,$2,$3,nullif($4,'')::date,nullif($5,'')::time,nullif($6,'')::time,$7,$8,$9,$10,$11,$11) returning id",[clientId,packageRow?.id||null,draft.eventName,draft.date,draft.startTime,draft.endTime,draft.venue||null,total,notes,draft.backdropColor?.slice(0,80)||null,deposit]);
     bookingId=saved.rows[0].id;
+    if(account)await postBookingDownpayment(db,{bookingId:saved.rows[0].id,eventName:draft.eventName,amount:deposit,date:draft.paymentDate,account,reference:`booking-deposit:${bookingId}`,externalReference:draft.paymentReference,actorId:null});
     await db.query("update public.telegram_booking_drafts set status='CONFIRMED',booking_id=$2::uuid,updated_at=now() where id=$1::uuid",[id,bookingId]);
-    await db.query("insert into public.audit_logs(action,entity_type,entity_id,metadata) values('BOOKING_CREATE_TELEGRAM','bookings',$1::uuid,$2::jsonb)",[bookingId,JSON.stringify({telegramUserId:userId,chatId,draftId:id,duplicateOverride:override,packageMatched:Boolean(packageRow),statedBalance:draft.statedBalance,paymentPosted:false})]);
+    await db.query("insert into public.audit_logs(action,entity_type,entity_id,metadata) values('BOOKING_CREATE_TELEGRAM','bookings',$1::uuid,$2::jsonb)",[bookingId,JSON.stringify({telegramUserId:userId,chatId,draftId:id,duplicateOverride:override,packageMatched:Boolean(packageRow),statedBalance:draft.statedBalance,paymentPosted:deposit>0,downpayment:deposit})]);
     await db.query("commit");
   }catch(error){await db.query("rollback").catch(()=>undefined);throw error;}finally{db.release();}
   if(bookingId&&googleCalendarConfigured()) after(async()=>{try{await syncGoogleCalendar(bookingId);}catch{console.error("Telegram booking Calendar sync deferred.");}});
-  return `✅ Booking saved in Salikha. ${draftStatus(bookingId)}\nNo payment was posted. Record any verified downpayment in Cashflow.`;
+  const payment=deposit>0?`Downpayment recorded in Cashflow: ${money(deposit)}\nRemaining balance: ${money(total-deposit)}`:"No downpayment was recorded.";
+  return `✅ Booking saved in Salikha. ${draftStatus(bookingId)}\n${payment}`;
 }
 const draftStatus=(id?:string)=>id?`Reference: ${id}`:"";
 
@@ -127,7 +148,7 @@ export async function POST(request:Request){
       return Response.json({ok:true});
     }
     const text=message?.text?.trim()||"";
-    if(text==="/start"||text==="/help"){await sendTelegramMessage(chat.id,"Paste the client booking form here. I’ll extract a draft for your review. Add `Client Name: ...` to the form, or send `client <name>` after the preview. Nothing saves until you tap Confirm. Payments are never posted automatically.");return Response.json({ok:true});}
+    if(text==="/start"||text==="/help"){await sendTelegramMessage(chat.id,"Paste the client booking form with Client Name, Name of the event, Package and Price. For a verified payment, add Downpayment, Payment Date, Payment Account and optional Payment Reference. Review the draft before confirming. Confirmation saves the booking and any listed downpayment.");return Response.json({ok:true});}
     if(!text)return Response.json({ok:true});
     if(/^\/?(?:client|edit)\s+/i.test(text)){await editDraft(chat.id,userId,text);return Response.json({ok:true});}
     if(text.length>5000){await sendTelegramMessage(chat.id,"Booking text is too long. Send at most 5,000 characters.");return Response.json({ok:true});}
