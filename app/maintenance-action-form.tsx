@@ -1,4 +1,5 @@
 "use client";
+import { WarningNotice } from "../lib/ui-dialogs";
 
 import {showToast} from "../lib/toasts";
 import {todayManila} from "../lib/workflow-validation";
@@ -61,7 +62,7 @@ export function MaintenanceActionForm({ equipmentId, equipmentName, onClose, onS
             <h2 id="maintenance-title">Add maintenance action</h2>
             <small>{equipmentName}</small>
           </div>
-          {error && <p className="form-warning" role="alert">{error}</p>}
+          {error && <WarningNotice>{error}</WarningNotice>}
           <button className="close-button" type="button" onClick={onClose} disabled={saving} aria-label="Close maintenance form"><X aria-hidden="true" /></button>
         </div>
         <div className="calendar-setup-body">

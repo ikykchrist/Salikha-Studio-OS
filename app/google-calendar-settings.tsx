@@ -1,4 +1,5 @@
 "use client";
+import { WarningNotice } from "../lib/ui-dialogs";
 
 import { useEffect, useState } from "react";
 import { CalendarRange, Check, ExternalLink, Save } from "lucide-react";
@@ -50,7 +51,7 @@ export function GoogleCalendarSettings() {
       <label>OAuth client secret<input type="password" value={clientSecret} onChange={(event) => setClientSecret(event.target.value)} placeholder={configured ? "Saved securely · leave blank to keep current" : "Paste client secret"} autoComplete="new-password" required={!configured} /></label>
       <label className="wide-field">Authorized redirect URI (add this exact URL in Google Cloud)<input value={redirectUri || (typeof window !== "undefined" ? window.location.origin + "/api/google-calendar/callback" : "")} readOnly /></label>
       <small className="google-oauth-help">Google Cloud Console → enable Google Calendar API → OAuth consent screen → add your Google account as a test user → OAuth Client → Authorized redirect URIs.</small>
-      {error && <p className="form-warning google-oauth-feedback" role="alert">{error}</p>}{notice && <p className="google-calendar-message google-oauth-feedback" role="status"><Check aria-hidden="true" />{notice}</p>}
+      {error && <WarningNotice>{error}</WarningNotice>}{notice && <p className="google-calendar-message google-oauth-feedback" role="status"><Check aria-hidden="true" />{notice}</p>}
       <div className="google-oauth-actions"><button className="primary-button" type="submit" disabled={saving}>{saving ? "Saving…" : <><Save aria-hidden="true" /> Save OAuth settings</>}</button>{configured && <a className="secondary-button" href="/api/google-calendar/connect"><ExternalLink aria-hidden="true" /> {connected ? "Reconnect Google account" : "Connect Google account"}</a>}</div>
     </form>}
   </article>;

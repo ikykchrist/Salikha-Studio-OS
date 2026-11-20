@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { ListPlus, LoaderCircle, Plus, Trash2 } from "lucide-react";
 import { getLocalDatabase } from "../lib/local-database";
-import { showConfirm } from "../lib/ui-dialogs";
+import { WarningNotice, showConfirm } from "../lib/ui-dialogs";
 
 type Addon = { id: string; name: string; price: number; active: boolean };
 
@@ -56,6 +56,6 @@ export function PackageAddonManager({ packageId }: { packageId: string }) {
   return <div className="package-detail-section"><div className="package-section-heading"><p className="eyebrow">Add-ons</p><span className="package-addon-count">{items.length} {items.length === 1 ? "option" : "options"}</span></div>
     {loading ? <div className="package-empty-line"><LoaderCircle className="recipe-spinner" aria-hidden="true" /><span>Loading add-ons…</span></div> : items.length ? <div className="package-addon-list">{items.map((item) => <div className="package-addon-row" key={item.id}><span><ListPlus aria-hidden="true" />{item.name}</span><strong>₱{item.price.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</strong><button className="recipe-remove-button" type="button" onClick={() => void remove(item)} aria-label={`Remove ${item.name}`}><Trash2 aria-hidden="true" /></button></div>)}</div> : <div className="package-empty-line"><ListPlus aria-hidden="true" /><span>No add-ons configured.</span></div>}
     <form className="package-addon-form" onSubmit={add}><label>Add an option<input value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Extra hour" required /></label><label>Price<div className="money-input"><span>₱</span><input type="number" min="0" step="0.01" value={price} onChange={(event) => setPrice(event.target.value)} placeholder="0.00" required /></div></label><button className="secondary-button" type="submit" disabled={saving}>{saving ? <LoaderCircle className="recipe-spinner" aria-hidden="true" /> : <Plus aria-hidden="true" />} Add</button></form>
-    {error && <p className="recipe-message recipe-error" role="alert">{error}</p>}
+    {error && <WarningNotice>{error}</WarningNotice>}
   </div>;
 }

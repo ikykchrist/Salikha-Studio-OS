@@ -653,7 +653,9 @@ button:not(:disabled):active { transform: scale(.985); }
 .app-dialog-close { align-items:center; background:var(--surface-muted); border:0; border-radius:8px; color:var(--muted); cursor:pointer; display:flex; height:34px; justify-content:center; position:absolute; right:16px; top:16px; width:34px; }
 .app-dialog-close svg { height:17px; width:17px; }
 .app-dialog h2 { color:var(--ink); font-size:18px; letter-spacing:-.02em; margin:18px 0 7px; }
-.app-dialog p { color:var(--muted); font-size:13px; line-height:1.6; margin:0; white-space:pre-line; }
+.app-dialog p,#app-dialog-message { color:var(--muted); font-size:13px; line-height:1.6; margin:0; white-space:pre-line; overflow-wrap:anywhere; }
+.app-dialog { max-height:calc(100dvh - 40px); overflow-y:auto; }
+.warning-reminder { color:var(--danger); }
 .app-dialog-actions { display:flex; gap:9px; justify-content:flex-end; margin-top:24px; }
 .app-dialog-actions button { min-height:40px; }
 .app-dialog-danger-button { background:var(--danger); border:1px solid var(--danger); border-radius:9px; color:white; cursor:pointer; font:inherit; font-size:12px; font-weight:650; padding:0 15px; }

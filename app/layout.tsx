@@ -6,6 +6,7 @@ import "./semantic-ui.css";
 import "./saas-polish.css";
 import Script from "next/script";
 import { PwaRegister } from "./pwa-register";
+import { DialogHost } from "../lib/ui-dialogs";
 
 export const metadata: Metadata = {
   title: "Salikha Studio OS",
@@ -21,7 +22,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body suppressHydrationWarning><Script id="salikha-theme" strategy="beforeInteractive">{`try { document.documentElement.dataset.theme = localStorage.getItem('salikha-theme') === 'dark' ? 'dark' : 'light'; } catch { document.documentElement.dataset.theme = 'light'; }`}</Script><PwaRegister />{children}</body>
+      <body suppressHydrationWarning><Script id="salikha-theme" strategy="beforeInteractive">{`try { document.documentElement.dataset.theme = localStorage.getItem('salikha-theme') === 'dark' ? 'dark' : 'light'; } catch { document.documentElement.dataset.theme = 'light'; }`}</Script><PwaRegister /><DialogHost />{children}</body>
     </html>
   );
 }

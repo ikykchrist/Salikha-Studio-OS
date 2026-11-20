@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Boxes, LoaderCircle, Plus, Trash2, X } from "lucide-react";
-import { showConfirm } from "../lib/ui-dialogs";
+import { WarningNotice, showConfirm } from "../lib/ui-dialogs";
 
 type RecipeLine = {
   id: string;
@@ -110,7 +110,7 @@ export function PackageRecipeManager({ packageId, packageName }: { packageId: st
         </button>
       </div>
       {loading ? <div className="package-empty-line"><LoaderCircle className="recipe-spinner" aria-hidden="true" /><span>Loading recipe…</span></div> : loadError ?
-        <p className="recipe-message recipe-error" role="alert">{loadError}</p> : recipe.length === 0 ?
+        <WarningNotice>{loadError}</WarningNotice> : recipe.length === 0 ?
           <div className="package-empty-line"><Boxes aria-hidden="true" /><span>No consumables configured.</span></div> : <>
             <div className="recipe-lines">
               {recipe.map((line) => {
@@ -160,7 +160,7 @@ export function PackageRecipeManager({ packageId, packageName }: { packageId: st
             </div>}
           <button className="secondary-button recipe-add-button" type="button" onClick={() => setDraft((current) => [...current, { key: crypto.randomUUID(), inventoryItemId: "", quantity: "" }])} disabled={!inventory.some((item) => item.active)}><Plus aria-hidden="true" /> Add ingredient</button>
           {!inventory.some((item) => item.active) && <p className="recipe-message">Add an active consumable in Inventory before building this recipe.</p>}
-          {error && <p className="recipe-message recipe-error" role="alert">{error}</p>}
+          {error && <WarningNotice>{error}</WarningNotice>}
           <div className="recipe-impact"><strong>{draft.length} {draft.length === 1 ? "ingredient" : "ingredients"}</strong><span>{draftChanged ? "Unsaved changes" : "No unsaved changes"}</span></div>
         </div>
         <div className="drawer-footer"><button className="secondary-button" type="button" onClick={closeEditor} disabled={saving}>Cancel</button><button className="primary-button" type="submit" disabled={saving || !draftChanged}>{saving ? <><LoaderCircle className="recipe-spinner" aria-hidden="true" /> Saving…</> : "Save recipe"}</button></div>
