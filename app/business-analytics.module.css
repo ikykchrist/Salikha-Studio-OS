@@ -1,0 +1,32 @@
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  align-items: start;
+}
+.card {
+  --chart-income: #248474;
+  --chart-cost: #d8784c;
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+  padding: clamp(18px, 2.5vw, 30px);
+}
+.card h2, .card p, .figure { margin: 0; }
+.heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; }
+.heading label, .metric { display: grid; gap: 4px; }
+.heading label, .metric span, .legend small { color: var(--muted); font-size: 13px; }
+.heading input { color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+.metric strong { font-size: clamp(24px, 3vw, 38px); line-height: 1.2; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.table { width: 100%; border-collapse: collapse; }
+.table th, .table td { text-align: start; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.table thead th { color: var(--muted); font-size: 13px; }
+.table tbody th { font-weight: 500; overflow-wrap: anywhere; }
+.table tr > :last-child { text-align: end; font-variant-numeric: tabular-nums; }
+.figure { display: grid; justify-items: center; gap: 22px; }
+.pie { width: min(190px, 74%); aspect-ratio: 1; border-radius: 50%; }
+.legend { width: 100%; display: grid; gap: 8px; }
+.legend div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; }
+.legend i { display: inline-block; width: 10px; height: 10px; margin-right: 7px; border-radius: 50%; background: var(--chart-income); }
+.legend div + div i { background: var(--chart-cost); }
+@media (max-width: 900px) { .grid { grid-template-columns: minmax(0, 1fr); } }

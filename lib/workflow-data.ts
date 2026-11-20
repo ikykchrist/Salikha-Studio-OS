@@ -2,7 +2,7 @@ import 'server-only';
 import { getLocalPostgresPool } from './local-postgres';
 
 // A consistent snapshot: all reports and money screens use these same records.
-export async function workflowData() {
+export async function workflowData({ includePackages = false } = {}) {
   const db = await getLocalPostgresPool().connect();
   try {
     await db.query('begin isolation level repeatable read read only');
@@ -15,7 +15,10 @@ export async function workflowData() {
     const ink=inkTable.rows[0].name?await db.query("select id,booking_id,event_date::text as movement_date,'USAGE' as movement_type,1 as quantity,estimated_cost as unit_cost,'Estimated ink - Printer ' || printer_no || ' - ' || printed_sheets || ' 4R sheets' as item_name from public.printer_ink_consumption order by created_at,id"):{rows:[]};
     const items = await db.query('select * from public.inventory_items order by name');
     const reconciliations = await db.query(`select r.*, r.reconciled_date::text as reconciled_date, a.name as account_name from public.cash_reconciliations r join public.cash_accounts a on a.id=r.account_id order by r.reconciled_date desc,r.created_at desc`);
+    const packages = includePackages
+      ? (await db.query<{ id: string; name: string; is_active: boolean }>('select id, name, is_active from public.service_packages order by name')).rows
+      : [];
     await db.query('commit');
-    return {accounts:accounts.rows, transactions:transactions.rows, expenses:expenses.rows, bookings:bookings.rows, movements:[...movements.rows,...ink.rows], items:items.rows, reconciliations:reconciliations.rows};
+    return {accounts:accounts.rows, transactions:transactions.rows, expenses:expenses.rows, bookings:bookings.rows, movements:[...movements.rows,...ink.rows], items:items.rows, reconciliations:reconciliations.rows, packages};
   } catch(e) {await db.query('rollback'); throw e;} finally {db.release();}
 }
