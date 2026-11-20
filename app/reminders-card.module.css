@@ -1,5 +1,16 @@
 .card { min-width: 0; padding: clamp(18px, 2vw, 26px); }
 .card h2 { margin: 0; }
+.toolbar, .tabs { display: flex; align-items: center; gap: 4px; }
+.toolbar { justify-content: space-between; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.tabs { padding: 3px; border: 1px solid var(--line); border-radius: 8px; }
+.tabs button, .delete { background: transparent; border: 0; border-radius: 5px; color: var(--muted); cursor: pointer; }
+.tabs button { padding: 6px 12px; }
+.tabs button[aria-selected="true"] { color: var(--surface); background: var(--ink); }
+.delete { display: inline-flex; align-items: center; gap: 5px; padding: 8px; color: var(--accent-dark); }
+.delete:hover { background: var(--soft-accent); }
+.archived { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.archived .check { cursor: default; color: var(--muted); }
+.archived input { filter: grayscale(1); }
 .form { display: grid; gap: 12px; padding: 14px; margin: 12px 0; border: 1px solid var(--line); border-radius: 10px; background: var(--canvas); }
 .title { display: grid; gap: 5px; font-weight: 600; }
 .title input { width: 100%; min-width: 0; border: 1px solid var(--line); border-radius: 7px; color: var(--ink); background: var(--surface); padding: 8px 10px; }

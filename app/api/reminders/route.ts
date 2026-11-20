@@ -12,7 +12,11 @@ export async function GET(request: Request) {
   if (auth.response) return auth.response;
   try {
     const db = await reminderStore();
-    const result = await db.query("select id, title, shared from public.dashboard_reminders where completed_at is null and (shared or $1) order by created_at desc, id", [auth.user.role === "ADMIN"]);
+    const archived = new URL(request.url).searchParams.get("view") === "archives";
+    const result = await db.query(archived
+      ? "select id, title, shared from public.dashboard_reminders where completed_at is not null and (shared or $1) order by completed_at desc, id"
+      : "select id, title, shared from public.dashboard_reminders where completed_at is null and (shared or $1) order by created_at desc, id",
+    [auth.user.role === "ADMIN"]);
     return reply({ reminders: result.rows });
   } catch { return unavailable(); }
 }
@@ -51,5 +55,19 @@ export async function PATCH(request: Request) {
       if (!visible.rowCount) return reply({ error: "This reminder is unavailable." }, 404);
     }
     return reply({ completed: true });
+  } catch { return unavailable(); }
+}
+
+export async function DELETE(request: Request) {
+  const auth = await requireUser(request, true);
+  if (auth.response) return auth.response;
+  const input = await request.json().catch(() => null);
+  if (!Array.isArray(input?.ids) || !input.ids.length || !input.ids.every(uuid)) {
+    return reply({ error: "Choose archived to-dos to delete." }, 400);
+  }
+  try {
+    const db = await reminderStore();
+    await db.query("delete from public.dashboard_reminders where completed_at is not null and id = any($1::uuid[])", [input.ids]);
+    return reply({ ok: true });
   } catch { return unavailable(); }
 }
