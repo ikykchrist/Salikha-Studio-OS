@@ -1,5 +1,5 @@
 import { requireUser } from "../../../lib/auth";
-import { countBookingsByMonth, type BusinessAnalytics } from "../../../lib/booking-analytics";
+import { countBookingsByMonth, profitBreakdown, profitHistory, type BusinessAnalytics } from "../../../lib/booking-analytics";
 import { buildFinancialReport } from "../../../lib/financial-report";
 import { workflowData } from "../../../lib/workflow-data";
 import { todayManila } from "../../../lib/workflow-validation";
@@ -23,6 +23,8 @@ export async function GET(request: Request) {
       income: (Math.round(report.revenue * 100) + Math.round(report.otherIncome * 100)) / 100,
       cost: (Math.round(report.directCosts * 100) + Math.round(report.operatingCosts * 100)) / 100,
       profit: report.operatingProfit,
+      history: profitHistory(report),
+      breakdown: profitBreakdown(report, source.expenses.map(row => ({ id: row.id, category: row.category }))),
     };
     return Response.json(summary, { headers: { "Cache-Control": "private, no-store" } });
   } catch {

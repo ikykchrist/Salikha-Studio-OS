@@ -18,11 +18,48 @@
 .heading label, .metric span, .legend small { color: var(--muted); font-size: 13px; }
 .heading input { color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
 .metric strong { font-size: clamp(24px, 3vw, 38px); line-height: 1.2; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.table { width: 100%; border-collapse: collapse; }
-.table th, .table td { text-align: start; padding: 9px 0; border-bottom: 1px solid var(--line); }
-.table thead th { color: var(--muted); font-size: 13px; }
-.table tbody th { font-weight: 500; overflow-wrap: anywhere; }
-.table tr > :last-child { text-align: end; font-variant-numeric: tabular-nums; }
+.checkbox { display: inline-flex; align-items: center; gap: 8px; width: fit-content; cursor: pointer; }
+.checkbox input { width: 16px; height: 16px; min-height: 0; margin: 0; accent-color: var(--accent); }
+.bars { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.bars li { display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 5px 12px; }
+.bars strong { font-variant-numeric: tabular-nums; }
+.track { grid-column: 1 / -1; background: var(--canvas); border-radius: 4px; height: 10px; }
+.track i { display: block; height: 100%; border-radius: inherit; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 10%); }
+.clickCard { cursor: pointer; }
+.openBreakdown { justify-self: start; display: inline-flex; gap: 4px; align-items: center; background: none; border: 0; padding: 0; color: var(--ink); font-weight: 650; cursor: pointer; }
+.clickCard:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.dialog { width: min(510px, calc(100% - 28px)); max-height: 85dvh; overflow: auto; margin: auto; border: 1px solid var(--line); padding: clamp(18px, 3vw, 30px); border-radius: 16px; background: var(--surface); color: var(--ink); }
+.dialog::backdrop { background: rgb(10 14 20 / 64%); }
+.dialog h2, .dialog p { margin: 0; }
+.breakdown { display: grid; gap: 9px; margin: 20px 0 0; }
+.breakdown div { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.breakdown dd { margin: 0; font-variant-numeric: tabular-nums; }
+.subtotal { border-top: 1px solid var(--line); padding-top: 9px; font-weight: 650; }
+.category { padding-left: 12px; font-size: .94em; color: var(--muted); }
+.trend { grid-column: 1 / -1; --gross: #2d897c; --net: #a362ce; }
+:global([data-theme="dark"]) .trend { --gross: #68c9b9; --net: #d1a2f2; }
+.ranges { display: flex; gap: 2px; border: 1px solid var(--line); padding: 3px; border-radius: 9px; }
+.ranges button { border: 0; border-radius: 6px; background: transparent; padding: 6px 12px; color: var(--muted); cursor: pointer; }
+.ranges button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+.lineLegend { display: flex; flex-wrap: wrap; gap: 18px; }
+.lineLegend span { display: inline-flex; align-items: center; gap: 6px; }
+.lineLegend span::before { content: ""; width: 22px; border-top: 3px solid var(--gross); }
+.lineLegend span + span::before { border-top: 3px dashed var(--net); }
+.chartFrame { padding: 12px 21px 30px 66px; }
+.plot { height: clamp(150px, 23vw, 240px); position: relative; }
+.plot svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.plot polyline { vector-effect: non-scaling-stroke; fill: none; stroke-linejoin: round; }
+.grossLine { stroke: var(--gross); stroke-width: 3; }
+.netLine { stroke: var(--net); stroke-width: 2.5; stroke-dasharray: 7 4; }
+.gridline { position: absolute; width: 100%; border-top: 1px solid var(--line); }
+.gridline[data-zero="true"] { border-color: var(--muted); }
+.gridline span, .xTick { position: absolute; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.gridline span { right: calc(100% + 8px); transform: translateY(-50%); }
+.xTick { top: calc(100% + 7px); transform: translateX(-50%); }
+.disclosure { width: fit-content; font-weight: 600; cursor: pointer; }
+.amountTable { width: 100%; border-collapse: collapse; margin-top: 10px; }
+.amountTable th, .amountTable td { text-align: right; border-bottom: 1px solid var(--line); padding: 6px 0; font-variant-numeric: tabular-nums; }
+.amountTable th:first-child { text-align: left; }
 .figure { display: grid; justify-items: center; gap: 22px; }
 .pie { width: min(190px, 74%); aspect-ratio: 1; border-radius: 50%; }
 .legend { width: 100%; display: grid; gap: 8px; }

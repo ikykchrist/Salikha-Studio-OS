@@ -16,7 +16,7 @@ export async function workflowData({ includePackages = false } = {}) {
     const items = await db.query('select * from public.inventory_items order by name');
     const reconciliations = await db.query(`select r.*, r.reconciled_date::text as reconciled_date, a.name as account_name from public.cash_reconciliations r join public.cash_accounts a on a.id=r.account_id order by r.reconciled_date desc,r.created_at desc`);
     const packages = includePackages
-      ? (await db.query<{ id: string; name: string; is_active: boolean }>('select id, name, is_active from public.service_packages order by name')).rows
+      ? (await db.query<{ id: string; name: string; is_active: boolean; calendar_color: string | null }>('select id, name, is_active, calendar_color from public.service_packages order by name')).rows
       : [];
     await db.query('commit');
     return {accounts:accounts.rows, transactions:transactions.rows, expenses:expenses.rows, bookings:bookings.rows, movements:[...movements.rows,...ink.rows], items:items.rows, reconciliations:reconciliations.rows, packages};
