@@ -4,6 +4,7 @@
 drop table if exists public.google_calendar_connections cascade;
 drop table if exists public.invoice_email_connections cascade;
 drop table if exists public.system_sessions cascade;
+drop table if exists public.dashboard_reminders cascade;
 drop table if exists public.system_users cascade;
 drop table if exists public.booking_consumable_usage cascade;
 drop table if exists public.calendar_events cascade;
@@ -552,3 +553,15 @@ create table if not exists public.printer_ink_consumption(id uuid primary key de
 alter table public.printer_ink_profiles enable row level security;alter table public.printer_ink_consumption enable row level security;
 insert into public.printer_ink_profiles(printer_no) values(1),(2) on conflict do nothing;
 create index if not exists printer_ink_consumption_date_idx on public.printer_ink_consumption(event_date);
+
+create table if not exists public.dashboard_reminders (
+  id uuid primary key,
+  title text not null check (length(trim(title)) between 1 and 300),
+  shared boolean not null default false,
+  created_by uuid not null references public.system_users(id),
+  created_at timestamptz not null default now(),
+  completed_at timestamptz,
+  completed_by uuid references public.system_users(id)
+);
+create index if not exists dashboard_reminders_open_idx on public.dashboard_reminders(created_at desc) where completed_at is null;
+alter table public.dashboard_reminders enable row level security;

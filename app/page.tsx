@@ -23,6 +23,7 @@ import { GoogleCalendarControls } from "./google-calendar-controls";
 import { GoogleCalendarSettings as GoogleCalendarSetupSettings } from "./google-calendar-settings";
 import { TelegramSettings } from "./telegram-settings";
 import { MoneyWorkspace, MoneyActionForm } from "./money-workspace";
+import { RemindersCard } from "./reminders-card";
 import { BusinessAnalyticsView } from "./business-analytics";
 import { FinancialReports } from "./financial-reports";
 import { ClientFollowups } from "./client-followups";
@@ -58,7 +59,7 @@ export default function Home() {
   const [authChecked, setAuthChecked] = useState(false);
   const [showBookingForm, setShowBookingForm] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [dashboardStats, setDashboardStats] = useState({ revenue: 0, bookings: 0, outstanding: 0, lowStock: 0, paidExpenses: 0, verifiedCash: 0 });
+  const [dashboardStats, setDashboardStats] = useState({ revenue: 0, bookings: 0, outstanding: 0, lowStock: 0 });
   const [upcomingBookings, setUpcomingBookings] = useState<Array<{ id: string; event_name: string; event_date: string | null; start_time: string | null; end_time: string | null; venue: string | null; maps_url: string | null; total_amount: number; downpayment_amount: number; paid_amount: number; clients: { display_name: string } | null; service_packages: { name: string } | null }>>([]);
   const [actionFlags, setActionFlags] = useState<{ overdueExpenses: number; lowStock: number; pendingBookings: number }>({ overdueExpenses: 0, lowStock: 0, pendingBookings: 0 });
   const [dashboardError, setDashboardError] = useState("");
@@ -115,33 +116,29 @@ export default function Home() {
     const todayIso = manilaDateKey(new Date());
     setLoading(true);
     (async () => {
-      const [bookingsRes, expensesRes, inventoryRes, cashAccountsRes, cashTxRes, clientsRes, packagesRes] = await Promise.all([
+      const [bookingsRes, expensesRes, inventoryRes, cashTxRes, clientsRes, packagesRes] = await Promise.all([
         database.from("bookings").select("id, event_name, event_date, start_time, end_time, venue, maps_url, status, total_amount, downpayment_amount, paid_amount, clients(display_name), service_packages(name)"),
         database.from("expenses").select("id, status"),
         database.from("inventory_items").select("id, on_hand, reorder_level, is_active"),
-        database.from("cash_accounts").select("id, opening_balance"),
         database.from("cash_transactions").select("id, transaction_date, status, direction, amount, purpose"),
         database.from("clients").select("id", { count: "exact", head: true }),
         database.from("service_packages").select("id, is_active"),
       ]);
       if (cancelled) return;
-      const failedQueries = [["Bookings", bookingsRes.error], ["expenses", expensesRes.error], ["inventory", inventoryRes.error], ["cash accounts", cashAccountsRes.error], ["cash transactions", cashTxRes.error], ["clients", clientsRes.error], ["packages", packagesRes.error]].filter((entry) => entry[1]).map((entry) => `${entry[0]}: ${(entry[1] as { message: string }).message}`);
+      const failedQueries = [["Bookings", bookingsRes.error], ["expenses", expensesRes.error], ["inventory", inventoryRes.error], ["cash transactions", cashTxRes.error], ["clients", clientsRes.error], ["packages", packagesRes.error]].filter((entry) => entry[1]).map((entry) => `${entry[0]}: ${(entry[1] as { message: string }).message}`);
       setDashboardError(failedQueries.join(" · "));
       if (failedQueries.length) return;
       const bookings = ((bookingsRes.data || []) as unknown) as Array<{ id: string; event_name: string; event_date: string | null; start_time: string | null; end_time: string | null; venue: string | null; maps_url: string | null; status: string; total_amount: number; downpayment_amount: number; paid_amount: number; clients: { display_name: string } | null; service_packages: { name: string } | null }>;
       const expenses = (expensesRes.data || []) as Array<{ id: string; status: string }>;
       const inventory = (inventoryRes.data || []) as Array<{ id: string; on_hand: number; reorder_level: number; is_active: boolean }>;
-      const accounts = (cashAccountsRes.data || []) as Array<{ id: string; opening_balance: number }>;
       const txs = (cashTxRes.data || []) as Array<{ id: string; transaction_date: string; status: string; direction: string; amount: number; purpose: string }>;
       const monthKey = todayIso.slice(0, 7);
       const postedThisMonth = txs.filter((transaction) => transaction.status === "POSTED" && transaction.purpose !== "TRANSFER" && bookingDateInput(transaction.transaction_date).slice(0, 7) === monthKey);
       const revenue = postedThisMonth.filter((transaction) => transaction.direction === "INFLOW").reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
-      const paidExpenses = postedThisMonth.filter((transaction) => transaction.direction === "OUTFLOW").reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
       const activeBookings = bookings.filter((booking) => booking.status === "PENDING");
       const outstanding = activeBookings.reduce((sum, booking) => sum + Math.max(0, Number(booking.total_amount || 0) - Number(booking.paid_amount || 0)), 0);
-      const verifiedCash = accounts.reduce((sum, a) => sum + Number(a.opening_balance || 0), 0) + txs.filter((t) => t.status === "POSTED").reduce((sum, t) => sum + (t.direction === "INFLOW" ? Number(t.amount) : -Number(t.amount)), 0);
       const lowStock = inventory.filter((item) => item.is_active && Number(item.on_hand) <= Number(item.reorder_level)).length;
-      setDashboardStats({ revenue, bookings: activeBookings.length, outstanding, lowStock, paidExpenses, verifiedCash });
+      setDashboardStats({ revenue, bookings: activeBookings.length, outstanding, lowStock });
       const currentMonth = todayIso.slice(0, 7);
       setUpcomingBookings(activeBookings.filter((booking) => { const date = bookingDateInput(booking.event_date); return date >= todayIso && date.slice(0, 7) === currentMonth; }).sort((a, b) => { const dateDifference = bookingDateInput(a.event_date).localeCompare(bookingDateInput(b.event_date)); if (dateDifference) return dateDifference; const timeDifference = (a.start_time || "23:59").localeCompare(b.start_time || "23:59"); return timeDifference || a.event_name.localeCompare(b.event_name); }).slice(0, 5));
       const activePackages = (packagesRes.data || []) as Array<{ is_active: boolean }>;
@@ -258,13 +255,14 @@ export default function Home() {
               <div className="panel-heading"><div><p className="eyebrow">Operations · This month</p><h2>Upcoming schedule</h2></div><button className="text-button" type="button" onClick={() => setActiveView("Calendar")}>View calendar <ArrowRight aria-hidden="true" /></button></div>
               {loading ? <div className="loading-list"><Skeleton /><Skeleton /><Skeleton /></div> : upcomingBookings.length === 0 ? <EmptyState title="Your schedule is clear" description="No future bookings are Pending." action="Create a booking" onAction={() => { setActiveView("Bookings"); setShowBookingForm(true); }} /> : <div className="upcoming-list">{upcomingBookings.map((booking) => <article className="upcoming-card" key={booking.id}><div className="upcoming-card-header"><div><small>Event</small><strong>{booking.event_name}</strong><span>{booking.clients?.display_name || "Unknown client"}</span></div><div className="upcoming-balance"><small>Outstanding balance</small><strong>₱{Math.max(0, Number(booking.total_amount || 0) - Number(booking.paid_amount || 0)).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</strong><span className="upcoming-status">Pending</span></div></div><div className="upcoming-card-details"><div><small>Package</small><strong>{booking.service_packages?.name || "Custom service"}</strong></div><div><small>Date</small><strong>{bookingDateLabel(booking.event_date)}</strong></div><div><small>Time</small><strong>{booking.start_time && booking.end_time ? `${bookingTimeLabel(booking.start_time)} – ${bookingTimeLabel(booking.end_time)}` : "TBA"}</strong></div><div><small>Venue</small><strong>{booking.venue || "Not set"}</strong>{booking.maps_url && <a className="booking-map-link" href={booking.maps_url} target="_blank" rel="noreferrer"><MapPin aria-hidden="true" /> Open map</a>}</div></div></article>)}</div>}
             </article>
-            <article className="panel attention-panel">
+            <RemindersCard isAdmin={authUser.role === "ADMIN"} />
+          </section>
+
+          <section className="dashboard-detail-grid"><article className="panel attention-panel">
               <div className="panel-heading"><div><p className="eyebrow">Needs attention</p><h2>Action queue</h2></div><span className="count-badge">{actionFlags.overdueExpenses + actionFlags.lowStock + actionFlags.pendingBookings}</span></div>
               {loading ? <div className="loading-list"><Skeleton /><Skeleton /></div> : actionFlags.overdueExpenses + actionFlags.lowStock + actionFlags.pendingBookings === 0 ? <EmptyState title="Nothing needs your attention" description="Payment reviews, low stock warnings, and unclosed events will be listed here." /> : <div className="action-list">{[{ title: "Pending bookings", note: "Review and update event status", count: actionFlags.pendingBookings, view: "Bookings", icon: ClipboardList }, { title: "Unpaid bills", note: "Review items awaiting payment", count: actionFlags.overdueExpenses, view: "Cashflow", icon: Receipt }, { title: "Low stock items", note: "Restock items below reorder level", count: actionFlags.lowStock, view: "Inventory", icon: Boxes }].filter((item) => item.count > 0).map((item) => <button type="button" key={item.view} onClick={() => setActiveView(item.view)}><span className="action-icon"><item.icon aria-hidden="true" /></span><span className="action-copy"><strong>{item.title}</strong><small>{item.note}</small></span><b>{item.count}</b><ArrowRight className="action-arrow" aria-hidden="true" /></button>)}</div>}
             </article>
-          </section>
-
-          <section className="dashboard-detail-grid"><article className="panel dashboard-pulse"><div className="panel-heading"><div><p className="eyebrow">Financial pulse</p><h2>Where the business stands</h2></div><button className="text-button" type="button" onClick={() => setActiveView("Reports")}>Open reports <ArrowRight aria-hidden="true" /></button></div><div className="pulse-list"><button type="button" onClick={() => setActiveView("Cashflow")}><span className="pulse-icon inflow"><TrendingUp aria-hidden="true" /></span><span><strong>Book cash balance</strong><small>Opening balances + posted transactions</small></span><b>{`₱${dashboardStats.verifiedCash.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`}</b><ArrowRight aria-hidden="true" /></button><button type="button" onClick={() => setActiveView("Cashflow")}><span className="pulse-icon outflow"><TrendingDown aria-hidden="true" /></span><span><strong>Cash out this month</strong><small>Posted outflows this month</small></span><b>{`₱${dashboardStats.paidExpenses.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`}</b><ArrowRight aria-hidden="true" /></button><button type="button" onClick={() => setActiveView("Bookings")}><span className="pulse-icon neutral"><CircleDollarSign aria-hidden="true" /></span><span><strong>Outstanding receivables</strong><small>Pending totals less recorded payments</small></span><b>{`₱${dashboardStats.outstanding.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`}</b><ArrowRight aria-hidden="true" /></button></div></article><article className="panel dashboard-health"><div className="panel-heading"><div><p className="eyebrow">System health</p><h2>Setup checklist</h2></div><span className="count-badge">{readyChecks} / {healthChecks.length}</span></div><div className="health-list">{healthChecks.map((item) => <button type="button" key={item.key} onClick={() => setActiveView(item.view)}><span><i className={`health-dot ${readiness[item.key] ? "ready" : "pending"}`} /><strong>{item.label}</strong><small>{item.note}</small></span><ArrowRight aria-hidden="true" /></button>)}</div></article></section>
+            <article className="panel dashboard-health"><div className="panel-heading"><div><p className="eyebrow">System health</p><h2>Setup checklist</h2></div><span className="count-badge">{readyChecks} / {healthChecks.length}</span></div><div className="health-list">{healthChecks.map((item) => <button type="button" key={item.key} onClick={() => setActiveView(item.view)}><span><i className={`health-dot ${readiness[item.key] ? "ready" : "pending"}`} /><strong>{item.label}</strong><small>{item.note}</small></span><ArrowRight aria-hidden="true" /></button>)}</div></article></section>
 
           {(!readiness.businessData || !readiness.packages || !readiness.consumables) && <section className="setup-banner">
             <div className="setup-icon"><Sparkles aria-hidden="true" /></div>
