@@ -1,12 +1,12 @@
 "use client";
 
-import { Children, isValidElement, useEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
+import { Children, isValidElement, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AlertTriangle, CircleCheck, Info, X } from "lucide-react";
 import { ToastHost } from './toasts';
 
-type DialogRequest = { id: number; kind: "alert" | "confirm"; title: string; message: ReactNode; confirmLabel: string; cancelLabel: string; danger: boolean };
-type QueuedDialog = DialogRequest & { resolve: (confirmed: boolean) => void };
+type DialogRequest = { id: number; kind: "alert" | "confirm" | "prompt"; title: string; message: ReactNode; confirmLabel: string; cancelLabel: string; danger: boolean };
+type QueuedDialog = DialogRequest & { resolve: (confirmed: boolean) => void; onValue?: (value: string | null) => void };
 let current: DialogRequest | null = null;
 let active: QueuedDialog | null = null;
 const queue: QueuedDialog[] = [];
@@ -55,18 +55,27 @@ export function WarningNotice({ children }: { children: ReactNode }) {
 export function showConfirm(message: string, options: { title?: string; confirmLabel?: string; cancelLabel?: string; danger?: boolean } = {}) {
   return enqueue({ kind: "confirm", title: options.title || "Please confirm", message, confirmLabel: options.confirmLabel || "Continue", cancelLabel: options.cancelLabel || "Cancel", danger: options.danger ?? false });
 }
-function settle(confirmed: boolean) {
+export function showPrompt(message: string, options: { title: string; confirmLabel?: string }) {
+  return new Promise<string | null>(onValue => {
+    queue.push({ id: nextId++, kind: "prompt", title: options.title, message, confirmLabel: options.confirmLabel || "Continue", cancelLabel: "Cancel", danger: true, resolve: () => undefined, onValue });
+    if (!active) startNext();
+  });
+}
+function settle(confirmed: boolean, value = "") {
   if (!active) return;
   const finished = active;
   active = null;
   current = null;
   finished.resolve(confirmed);
+  finished.onValue?.(confirmed ? value.trim() : null);
   startNext();
 }
 function subscribe(listener: () => void) { listeners.add(listener); return () => listeners.delete(listener); }
 function getSnapshot() { return current; }
 
 export function DialogHost() {
+  const [value, setValue] = useState("");
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const dialog = useSyncExternalStore(subscribe, getSnapshot, () => null);
   const confirmRef = useRef<HTMLButtonElement>(null);
   const sectionRef = useRef<HTMLElement>(null);
@@ -93,7 +102,9 @@ export function DialogHost() {
   useEffect(() => {
     if (!dialog) return;
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    confirmRef.current?.focus();
+    setValue("");
+    if (dialog.kind === "prompt") inputRef.current?.focus();
+    else confirmRef.current?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); settle(false); }
       if (event.key === "Tab") {
@@ -116,9 +127,10 @@ export function DialogHost() {
       <button className="app-dialog-close" type="button" aria-label="Close dialog" onClick={() => settle(false)}><X aria-hidden="true" /></button>
       <h2 id="app-dialog-title">{dialog.title}</h2>
       <div id="app-dialog-message">{dialog.message}</div>
+      {dialog.kind === "prompt" && <label className="app-dialog-input">Reason<textarea ref={inputRef} value={value} onChange={event => setValue(event.target.value)} rows={3} maxLength={500} placeholder="Enter a clear reason (at least 5 characters)" /><small>At least 5 characters.</small></label>}
       <div className="app-dialog-actions">
-        {dialog.kind === "confirm" && <button className="secondary-button" type="button" onClick={() => settle(false)}>{dialog.cancelLabel}</button>}
-        <button className={dialog.danger ? "app-dialog-danger-button" : "primary-button"} type="button" ref={confirmRef} onClick={() => settle(true)}>{dialog.confirmLabel}</button>
+        {dialog.kind !== "alert" && <button className="secondary-button" type="button" onClick={() => settle(false)}>{dialog.cancelLabel}</button>}
+        <button className={dialog.danger ? "app-dialog-danger-button" : "primary-button"} type="button" ref={confirmRef} disabled={dialog.kind === "prompt" && value.trim().length < 5} onClick={() => settle(true, value)}>{dialog.confirmLabel}</button>
       </div>
     </section>
   </div>, document.body)}</>;

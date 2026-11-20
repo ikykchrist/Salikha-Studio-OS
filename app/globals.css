@@ -656,6 +656,9 @@ button:not(:disabled):active { transform: scale(.985); }
 .app-dialog p,#app-dialog-message { color:var(--muted); font-size:13px; line-height:1.6; margin:0; white-space:pre-line; overflow-wrap:anywhere; }
 .app-dialog { max-height:calc(100dvh - 40px); overflow-y:auto; }
 .warning-reminder { color:var(--danger); }
+.app-dialog-input { display:grid; gap:7px; margin-top:18px; font-size:13px; color:var(--ink); }
+.app-dialog-input textarea { width:100%; resize:vertical; border:1px solid var(--line); border-radius:8px; padding:10px; background:var(--surface); color:var(--ink); font:inherit; }
+.app-dialog-input small { color:var(--muted); }
 .app-dialog-actions { display:flex; gap:9px; justify-content:flex-end; margin-top:24px; }
 .app-dialog-actions button { min-height:40px; }
 .app-dialog-danger-button { background:var(--danger); border:1px solid var(--danger); border-radius:9px; color:white; cursor:pointer; font:inherit; font-size:12px; font-weight:650; padding:0 15px; }
