@@ -21,6 +21,7 @@ export type StaffEvent = {
 
 export type StaffMember = StaffProfile & {
   id: string;
+  photoVersion: string | null;
   eventCount: number;
   upcomingCount: number;
   totalReceived: string;

@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { ExternalLink, Plus, Search, Users } from "lucide-react";
 import { formatManilaDate } from "../lib/manila-datetime";
 import { staffRoles, type StaffBooking, type StaffMember } from "../lib/staff-roster";
+import { compressStaffPhoto } from "../lib/staff-profile-photo";
 import { money } from "../lib/workflow-validation";
 
 type Roster = { staff: StaffMember[]; bookings: StaffBooking[] };
@@ -13,6 +14,21 @@ async function loadRoster(signal?: AbortSignal): Promise<Roster> {
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || "Could not load the staff roster.");
   return data;
+}
+
+function staffPhotoUrl(staff: StaffMember) {
+  return staff.photoVersion
+    ? `/api/staff/photo?id=${encodeURIComponent(staff.id)}&v=${encodeURIComponent(staff.photoVersion)}`
+    : null;
+}
+
+function StaffAvatar({ name, photo }: { name: string; photo: string | null }) {
+  const [failedPhoto, setFailedPhoto] = useState<string | null>(null);
+  if (photo && photo !== failedPhoto) {
+    return <img className="avatar roster-avatar" src={photo} alt="" loading="lazy" decoding="async" onError={() => setFailedPhoto(photo)} />;
+  }
+  const initials = name.trim().split(/\s+/).slice(0, 2).map((part) => part[0] ?? "").join("").toUpperCase();
+  return <span className="avatar roster-avatar" aria-hidden="true">{initials}</span>;
 }
 
 export function StaffRoster() {
@@ -25,6 +41,9 @@ export function StaffRoster() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [retry, setRetry] = useState(0);
+  const [profilePhoto, setProfilePhoto] = useState<string | null>();
+  const [compressing, setCompressing] = useState(false);
+  const [photoError, setPhotoError] = useState("");
 
   useEffect(() => {
     const controller = new AbortController();
@@ -39,6 +58,27 @@ export function StaffRoster() {
   const assignedBookings = new Set(selected?.events.map((event) => event.bookingId));
   const availableBookings = roster?.bookings.filter(({ id }) => !assignedBookings.has(id)) ?? [];
   const initial = editing === "edit" ? selected : undefined;
+  const currentPhoto = initial ? staffPhotoUrl(initial) : null;
+  const previewPhoto = profilePhoto === undefined ? currentPhoto : profilePhoto;
+  const busy = saving || compressing;
+
+  function openProfile(mode: "new" | "edit") {
+    setProfilePhoto(undefined);
+    setPhotoError("");
+    setEditing(mode);
+  }
+
+  async function preparePhoto(file: File) {
+    setCompressing(true);
+    setPhotoError("");
+    try {
+      setProfilePhoto(await compressStaffPhoto(file));
+    } catch (failure) {
+      setPhotoError(failure instanceof Error ? failure.message : "Couldn't process the photo.");
+    } finally {
+      setCompressing(false);
+    }
+  }
 
   async function save(fields: Record<string, unknown>, success: string) {
     if (saving) return;
@@ -69,13 +109,14 @@ export function StaffRoster() {
 
   function submitProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    void save({ ...Object.fromEntries(new FormData(event.currentTarget)), action: "profile", id: initial?.id }, "Staff profile saved.");
+    if (busy) return;
+    void save({ ...Object.fromEntries(new FormData(event.currentTarget)), action: "profile", id: initial?.id, profilePhoto }, "Staff profile saved.");
   }
 
   return <>
     <section className="page-heading">
       <div><p className="eyebrow">Workspace / Staff</p><h1>Staff roster</h1><p className="subheading">Manage operators, event assignments, and payouts.</p></div>
-      <button type="button" className="primary-button" disabled={saving || !roster} onClick={() => setEditing("new")}><Plus aria-hidden="true" /> Add staff</button>
+      <button type="button" className="primary-button" disabled={busy || !roster} onClick={() => openProfile("new")}><Plus aria-hidden="true" /> Add staff</button>
     </section>
     {error && <div className="roster-feedback" role="alert">{error} <button className="secondary-button" type="button" onClick={() => { setError(""); setRetry((version) => version + 1); }}>Refresh roster</button></div>}
     {notice && <p className="roster-feedback" role="status">{notice}</p>}
@@ -86,9 +127,9 @@ export function StaffRoster() {
         <div className="search-field"><Search aria-hidden="true" /><input aria-label="Search staff" placeholder="Search staff" value={query} onChange={(event) => setQuery(event.target.value)} /></div>
         <div className="staff-list">
           {visibleStaff.map((staff) => (
-            <button type="button" className="staff-list-item" aria-pressed={staff.id === selected?.id} disabled={saving}
+            <button type="button" className="staff-list-item" aria-pressed={staff.id === selected?.id} disabled={busy}
               key={staff.id} onClick={() => { setSelectedId(staff.id); setEditing(null); setBookingId(""); setNotice(""); }}>
-              <span className="avatar" aria-hidden="true">{staff.name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase()}</span>
+              <StaffAvatar name={staff.name} photo={staffPhotoUrl(staff)} />
               <span><strong>{staff.name}</strong><small>{staff.assignment}</small></span>
             </button>
           ))}
@@ -100,18 +141,36 @@ export function StaffRoster() {
         {editing ? <>
           <h2>{editing === "new" ? "Add staff" : "Edit staff profile"}</h2>
           <form className="team-create-form roster-profile-form" key={initial?.id ?? "new"} onSubmit={submitProfile}>
+            <div className="roster-photo-field">
+              <StaffAvatar name={initial?.name ?? ""} photo={previewPhoto} />
+              <div>
+                <label>Profile photo
+                  <input type="file" accept="image/*" disabled={busy} onChange={(event) => {
+                    const file = event.currentTarget.files?.[0];
+                    event.currentTarget.value = "";
+                    if (file) void preparePhoto(file);
+                  }} />
+                </label>
+                {compressing && <p role="status">Compressing photo…</p>}
+                {photoError && <p role="alert">{photoError}</p>}
+                {previewPhoto && <button type="button" className="text-button" disabled={busy} onClick={() => { setPhotoError(""); setProfilePhoto(null); }}>Remove photo</button>}
+              </div>
+            </div>
             <label>Full name<input name="name" defaultValue={initial?.name} required maxLength={120} /></label>
             <label>Assignment<select name="assignment" defaultValue={initial?.assignment ?? staffRoles[0]}>{staffRoles.map((role) => <option key={role}>{role}</option>)}</select></label>
             <label>Address<input name="address" defaultValue={initial?.address} maxLength={500} /></label>
             <label>Phone number<input name="phone" type="tel" defaultValue={initial?.phone} maxLength={40} /></label>
             <label>Email<input name="email" type="email" defaultValue={initial?.email} maxLength={254} /></label>
             <label>Facebook link<input name="facebookUrl" type="url" defaultValue={initial?.facebookUrl} maxLength={500} placeholder="https://www.facebook.com/…" /></label>
-            <div className="roster-actions"><button type="submit" className="primary-button" disabled={saving}>Save profile</button><button type="button" className="secondary-button" disabled={saving} onClick={() => setEditing(null)}>Cancel</button></div>
+            <div className="roster-actions"><button type="submit" className="primary-button" disabled={busy}>Save profile</button><button type="button" className="secondary-button" disabled={busy} onClick={() => setEditing(null)}>Cancel</button></div>
           </form>
         </> : selected ? <>
           <div className="panel-heading roster-profile-heading">
-            <div><h2>{selected.name}</h2><p>{selected.assignment}</p></div>
-            <button type="button" className="secondary-button" disabled={saving} onClick={() => setEditing("edit")}>Edit profile</button>
+            <div className="roster-profile-name">
+              <StaffAvatar name={selected.name} photo={staffPhotoUrl(selected)} />
+              <div><h2>{selected.name}</h2><p>{selected.assignment}</p></div>
+            </div>
+            <button type="button" className="secondary-button" disabled={saving} onClick={() => openProfile("edit")}>Edit profile</button>
           </div>
           <dl className="roster-contact">
             <div><dt>Address</dt><dd>{selected.address || "—"}</dd></div>
@@ -159,7 +218,7 @@ export function StaffRoster() {
               ))}
             </ul> : <p>No events assigned yet.</p>}
           </section>
-        </> : <div className="empty-state"><div className="empty-mark"><Users aria-hidden="true" /></div><h3>Add your first staff member</h3><p>Profiles, assignments, and payouts will appear here.</p><button type="button" className="secondary-button" onClick={() => setEditing("new")}>Add staff</button></div>}
+        </> : <div className="empty-state"><div className="empty-mark"><Users aria-hidden="true" /></div><h3>Add your first staff member</h3><p>Profiles, assignments, and payouts will appear here.</p><button type="button" className="secondary-button" onClick={() => openProfile("new")}>Add staff</button></div>}
       </section>
     </div>}
   </>;

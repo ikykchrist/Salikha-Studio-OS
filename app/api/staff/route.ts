@@ -1,12 +1,68 @@
 import { requireUser } from "../../../lib/auth";
 import { getLocalPostgresPool } from "../../../lib/local-postgres";
 import { staffRoles, type StaffBooking, type StaffEvent, type StaffMember, type StaffProfile } from "../../../lib/staff-roster";
+import { staffPhotoMaxBytes, staffPhotoMaxEdge } from "../../../lib/staff-profile-photo";
 import { cents, todayManila, uuid } from "../../../lib/workflow-validation";
 
 const headers = { "cache-control": "no-store" };
 const failure = (error: string, status = 400) => Response.json({ error }, { status, headers });
 const textField = (value: unknown, length: number) =>
   typeof value === "string" && value.length <= length && !value.includes("\0") ? value.trim() : null;
+
+const maxRosterRequest = 120 * 1024;
+class RosterRequestTooLarge extends Error {}
+
+async function readRosterRequest(request: Request): Promise<unknown> {
+  if (Number(request.headers.get("content-length")) > maxRosterRequest) throw new RosterRequestTooLarge();
+  const reader = request.body?.getReader();
+  if (!reader) return null;
+  const decoder = new TextDecoder();
+  let body = "";
+  let bytes = 0;
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) return JSON.parse(body + decoder.decode());
+      bytes += value.byteLength;
+      if (bytes > maxRosterRequest) {
+        await reader.cancel().catch(() => {});
+        throw new RosterRequestTooLarge();
+      }
+      body += decoder.decode(value, { stream: true });
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+function decodeStaffPhoto(value: unknown): Buffer | undefined {
+  const prefix = "data:image/jpeg;base64,";
+  if (typeof value !== "string" || !value.startsWith(prefix) || value.length > prefix.length + Math.ceil(staffPhotoMaxBytes / 3) * 4) return;
+  const encoded = value.slice(prefix.length);
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(encoded)) return;
+  const photo = Buffer.from(encoded, "base64");
+  if (photo.length < 12 || photo.length > staffPhotoMaxBytes || photo.readUInt16BE(0) !== 0xffd8 ||
+      photo.readUInt16BE(photo.length - 2) !== 0xffd9 || photo.toString("base64") !== encoded) return;
+
+  // Read only the JPEG frame header to cap pixel dimensions without decoding on the server.
+  for (let offset = 2; offset + 3 < photo.length;) {
+    if (photo[offset++] !== 0xff) return;
+    while (photo[offset] === 0xff) offset++;
+    if (offset + 2 >= photo.length) return;
+    const marker = photo[offset++];
+    if (marker === 0xda || marker === 0xd9 || marker === 0x00) return;
+    const length = photo.readUInt16BE(offset);
+    if (length < 2 || offset + length > photo.length) return;
+    if (marker === 0xc0 || marker === 0xc2) {
+      if (length < 8) return;
+      const height = photo.readUInt16BE(offset + 3);
+      const width = photo.readUInt16BE(offset + 5);
+      if (width >= 1 && width <= staffPhotoMaxEdge && height >= 1 && height <= staffPhotoMaxEdge) return photo;
+      return;
+    }
+    offset += length;
+  }
+}
 
 function profileFields(input: Record<string, unknown>): StaffProfile | null {
   const name = textField(input.name, 120);
@@ -35,6 +91,7 @@ export async function GET(request: Request) {
     const [roster, bookings] = await Promise.all([
       db.query<StaffMember>(`
         select s.id, s.name, s.address, s.phone, s.email, s.facebook_url as "facebookUrl", s.assignment,
+          s.profile_photo_updated_at::text as "photoVersion",
           count(b.id) filter (where b.status <> 'CANCELLED')::int as "eventCount",
           count(b.id) filter (where b.status in ('PENDING', 'CONFIRMED') and b.event_date >= $1::date)::int as "upcomingCount",
           coalesce(sum(a.received_amount), 0)::text as "totalReceived",
@@ -91,19 +148,33 @@ async function updateEvent(input: Record<string, unknown>) {
 export async function POST(request: Request) {
   const auth = await requireUser(request, true);
   if (auth.response) return auth.response;
-  const input = await request.json().catch(() => null);
-  if (!input || typeof input !== "object" || Array.isArray(input)) return failure("Enter valid roster details.");
+  let body: unknown;
+  try { body = await readRosterRequest(request); }
+  catch (error) {
+    return error instanceof RosterRequestTooLarge ? failure("The profile upload is too large.", 413) : failure("Enter valid roster details.");
+  }
+  if (!body || typeof body !== "object" || Array.isArray(body)) return failure("Enter valid roster details.");
+  const input = body as Record<string, unknown>;
   try {
     if (input.action !== "profile") return await updateEvent(input);
     const profile = profileFields(input);
     if (!profile || (input.id != null && !uuid(input.id))) {
       return failure("Enter a name and assignment. If supplied, use a valid email and an HTTPS Facebook link.");
     }
-    const values = [profile.name, profile.address, profile.phone, profile.email, profile.facebookUrl, profile.assignment];
+    const changePhoto = input.profilePhoto !== undefined;
+    const photo = input.profilePhoto == null ? null : decodeStaffPhoto(input.profilePhoto);
+    if (photo === undefined) return failure("Choose a valid compressed JPEG photo up to 384 pixels and 80 KB.");
+    const values = [profile.name, profile.address, profile.phone, profile.email, profile.facebookUrl, profile.assignment, photo];
     const db = getLocalPostgresPool();
     const result = input.id
-      ? await db.query<Pick<StaffEvent, "id">>(`update public.staff_members set name=$1,address=$2,phone=$3,email=$4,facebook_url=$5,assignment=$6 where id=$7 returning id`, [...values, input.id])
-      : await db.query<Pick<StaffEvent, "id">>(`insert into public.staff_members(name,address,phone,email,facebook_url,assignment) values($1,$2,$3,$4,$5,$6) returning id`, values);
+      ? await db.query<Pick<StaffEvent, "id">>(`
+        update public.staff_members set name=$1,address=$2,phone=$3,email=$4,facebook_url=$5,assignment=$6,
+          profile_photo=case when $8 then $7::bytea else profile_photo end,
+          profile_photo_updated_at=case when $8 then case when $7::bytea is not null then clock_timestamp() end else profile_photo_updated_at end
+        where id=$9 returning id`, [...values, changePhoto, input.id])
+      : await db.query<Pick<StaffEvent, "id">>(`
+        insert into public.staff_members(name,address,phone,email,facebook_url,assignment,profile_photo,profile_photo_updated_at)
+        values($1,$2,$3,$4,$5,$6,$7::bytea,case when $7::bytea is not null then clock_timestamp() end) returning id`, values);
     return result.rows[0] ? Response.json({ id: result.rows[0].id }, { headers }) : failure("Staff profile was not found.", 404);
   } catch (error) {
     console.error("Staff roster save failed", { code: (error as { code?: string })?.code });

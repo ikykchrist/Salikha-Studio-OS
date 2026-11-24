@@ -922,3 +922,12 @@ button:not(:disabled):active { transform: scale(.985); }
 @media (max-width: 480px) {
   .roster-metrics { grid-template-columns: 1fr; }
 }
+.roster-avatar { flex-shrink: 0; object-fit: cover; }
+.roster-profile-name, .roster-photo-field { align-items: center; display: flex; gap: 12px; min-width: 0; }
+.roster-profile-name h2 { overflow-wrap: anywhere; }
+.roster-profile-name .roster-avatar, .roster-photo-field .roster-avatar { height: 58px; width: 58px; }
+.roster-photo-field { grid-column: 1 / -1; flex-wrap: wrap; }
+.roster-photo-field > div { flex: 1; min-width: 0; }
+.roster-photo-field input { max-width: 100%; }
+.roster-photo-field p { color: var(--muted); font-size: 12px; margin: 5px 0 0; }
+.roster-photo-field .text-button { margin-top: 5px; }
