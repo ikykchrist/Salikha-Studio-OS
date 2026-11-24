@@ -382,6 +382,8 @@ button, a, input, select, textarea, .panel, .metric-card {
 button:not(:disabled):active { transform: scale(.985); }
 .page-content { animation: workspace-view-enter .16s ease-out both; min-height: calc(100dvh - 72px); }
 .metric-card, .panel, .settings-card, .upcoming-card { min-width: 0; }
+.metric-card-navigation { color: var(--ink); cursor: pointer; font: inherit; text-align: left; }
+.metric-card-navigation:hover { border-color: var(--accent); }
 .metric-card strong, .expense-metric strong, .booking-summary-card strong { font-variant-numeric: tabular-nums; }
 .skeleton {
   animation: skeleton-breathe 1.8s ease-in-out infinite;

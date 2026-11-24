@@ -236,16 +236,18 @@ export default function Home() {
             {(() => {
               const money = (value: number) => `₱${value.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`;
               return [
-                ["Cash in this month", money(dashboardStats.revenue), dashboardStats.revenue === 0 ? "No posted inflows this month" : "Posted cash inflows", dashboardStats.revenue > 0 ? "positive" : "neutral"],
-                ["Pending bookings", String(dashboardStats.bookings), dashboardStats.bookings === 0 ? "No bookings awaiting completion" : `${upcomingBookings.length} upcoming events`, "neutral"],
-                ["Outstanding balance", money(dashboardStats.outstanding), dashboardStats.outstanding === 0 ? "All accounts settled" : "Unpaid booking balances", dashboardStats.outstanding === 0 ? "positive" : "warning"],
-                ["Low stock items", String(dashboardStats.lowStock), dashboardStats.lowStock === 0 ? "Inventory is healthy" : "Below reorder level", dashboardStats.lowStock === 0 ? "positive" : "warning"],
-              ].map(([label, value, note, tone]) => (
-                <article className="metric-card" key={label}>
-                  <div className="metric-top"><span>{loading ? <Skeleton className="label-skeleton" /> : label}</span><span className={`metric-dot ${tone}`} /></div>
+                ["Cash in this month", money(dashboardStats.revenue), dashboardStats.revenue === 0 ? "No posted inflows this month" : "Posted cash inflows", dashboardStats.revenue > 0 ? "positive" : "neutral", "Cashflow"],
+                ["Pending bookings", String(dashboardStats.bookings), dashboardStats.bookings === 0 ? "No bookings awaiting completion" : `${upcomingBookings.length} upcoming events`, "neutral", "Bookings"],
+                ["Outstanding balance", money(dashboardStats.outstanding), dashboardStats.outstanding === 0 ? "All accounts settled" : "Unpaid booking balances", dashboardStats.outstanding === 0 ? "positive" : "warning", "Bookings"],
+                ["Low stock items", String(dashboardStats.lowStock), dashboardStats.lowStock === 0 ? "Inventory is healthy" : "Below reorder level", dashboardStats.lowStock === 0 ? "positive" : "warning", "Inventory"],
+              ].map(([label, value, note, tone, destination]) => (
+                <button className="metric-card metric-card-navigation" key={label} type="button"
+                  aria-label={`${label}${loading || dashboardError ? "" : `, ${value}`}. Open ${destination}`}
+                  onClick={() => setActiveView(destination)}>
+                  <span className="metric-top"><span>{loading ? <Skeleton className="label-skeleton" /> : label}</span><span className={`metric-dot ${tone}`} aria-hidden="true" /></span>
                   {loading ? <Skeleton className="value-skeleton" /> : <strong>{dashboardError ? "—" : value}</strong>}
                   {loading ? <Skeleton className="note-skeleton" /> : <small>{dashboardError ? "Data unavailable — retry connection" : note}</small>}
-                </article>
+                </button>
               ));
             })()}
           </section>
