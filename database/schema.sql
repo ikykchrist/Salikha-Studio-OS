@@ -610,3 +610,11 @@ alter table public.staff_members
   add column if not exists profile_photo bytea
     check (octet_length(profile_photo) between 1 and 81920),
   add column if not exists profile_photo_updated_at timestamptz;
+
+alter table public.bookings
+  add column if not exists event_end_date date,
+  add column if not exists preparation_operator_id uuid references public.staff_members(id) on delete restrict;
+
+alter table public.staff_event_assignments
+  add column if not exists preparation_only boolean not null default false,
+  add column if not exists scheduled boolean not null default true;

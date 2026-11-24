@@ -56,7 +56,7 @@ export function StaffRoster() {
 
   const selected = roster?.staff.find(({ id }) => id === selectedId) ?? roster?.staff[0];
   const visibleStaff = roster?.staff.filter((staff) => `${staff.name} ${staff.assignment}`.toLowerCase().includes(query.trim().toLowerCase())) ?? [];
-  const assignedBookings = new Set(selected?.events.map((event) => event.bookingId));
+  const assignedBookings = new Set(selected?.events.filter((event) => event.status !== "UNASSIGNED").map((event) => event.bookingId));
   const availableBookings = roster?.bookings.filter(({ id }) => !assignedBookings.has(id)) ?? [];
   const initial = editing === "edit" ? selected : undefined;
   const currentPhoto = initial ? staffPhotoUrl(initial) : null;
@@ -194,7 +194,7 @@ export function StaffRoster() {
             {selected.events.length ? <ul className="roster-event-list">
               {selected.events.map((event) => (
                 <li key={event.id}>
-                  <div><strong>{event.eventName}</strong><small>{event.eventDate ? formatManilaDate(event.eventDate) : "Date TBA"} · {event.status === "REMOVED" ? "Booking removed" : event.status.toLowerCase()}</small></div>
+                  <div><strong>{event.eventName}</strong><small>{event.eventDate ? formatManilaDate(event.eventDate) : "Date TBA"} · {event.status === "REMOVED" ? "Booking removed" : event.status === "UNASSIGNED" ? "Assignment ended" : event.status.toLowerCase()}</small></div>
                   <form className="roster-actions" key={event.receivedAmount} onSubmit={(submit) => {
                     submit.preventDefault();
                     const receivedAmount = new FormData(submit.currentTarget).get("receivedAmount");

@@ -6,6 +6,7 @@ import { requireUser } from '../../../lib/auth';
 import { cents,uuid,validDate } from '../../../lib/workflow-validation';
 import { validBookingSchedule, hasCompleteBookingSchedule } from '../../../lib/booking-schedule';
 import { ensureBookingTbaSchema } from '../../../lib/ensure-booking-tba-schema';
+import { bookingStaffConflict, lockStaffSchedule, scheduledBookingStatuses } from '../../../lib/staff-schedule';
 import { postBookingDownpayment } from '../../../lib/booking-downpayment';
 export const runtime='nodejs';
 export async function POST(request:Request){
@@ -18,11 +19,17 @@ export async function POST(request:Request){
   const deposit=body.downpayment;
   const depositAmount=deposit===undefined?0:cents(deposit?.amount);
   if(deposit!==undefined&&(depositAmount<=0||!uuid(deposit.accountId)||!validDate(deposit.date)))throw Error('Enter a positive downpayment, receiving account and actual payment date.');
-  await db.query('begin'); await ensureBookingTbaSchema(db);
+  await db.query('begin'); await lockStaffSchedule(db); await ensureBookingTbaSchema(db);
   // Use the same account-before-booking lock order as Cashflow receipts.
   const account=depositAmount?(await db.query('select id,name from public.cash_accounts where id=$1 and is_active for update',[deposit.accountId])).rows[0]:null;
   if(depositAmount&&!account)throw Error('Choose an active receiving account.');
   const found=await db.query('select *,event_date::text as saved_date from public.bookings where id=$1 for update',[body.id]);const current=found.rows[0];if(!current)throw Error('Booking not found.');
+  const changedDate = (body.date || null) !== current.saved_date;
+  const reopened = !scheduledBookingStatuses.includes(current.status) && scheduledBookingStatuses.includes(body.status);
+  if (body.date && scheduledBookingStatuses.includes(body.status) && (changedDate || reopened) && await bookingStaffConflict(db, body.id, body.date)) {
+    await db.query('rollback');
+    return Response.json({error:'An assigned staff member already has an event on that date. Change the date or remove their assignment first.'},{status:409});
+  }
   if(depositAmount&&Number(current.downpayment_amount)>0)throw Error('A downpayment is already recorded. Refresh the booking or void an incorrect receipt in Cashflow.');
   if(depositAmount&&(current.status!=='PENDING'||body.status==='CANCELLED'))throw Error('Record a downpayment on a pending booking.');
   const paid=Math.round(Number(current.paid_amount)*100)+depositAmount;
@@ -53,7 +60,7 @@ export async function POST(request:Request){
   if(addonIds!==undefined){const column=await db.query("select 1 from information_schema.columns where table_schema='public' and table_name='bookings' and column_name='addons_snapshot'");addonColumn=Boolean(column.rowCount);if(!addonColumn&&addonSnapshot.length){await db.query("alter table public.bookings add column if not exists addons_snapshot jsonb not null default '[]'::jsonb");addonColumn=true;}}
   if(body.mapsUrl&&!/^https?:\/\//i.test(String(body.mapsUrl)))throw Error('Enter a valid map URL.');
   const eventName=String(body.eventName).trim();
-  const saved=await db.query(`update public.bookings set event_name=$2,event_date=nullif($3,'')::date,start_time=nullif($4,'')::time,end_time=nullif($5,'')::time,venue=nullif($6,''),maps_url=nullif($7,''),total_amount=$8,status=$9,package_id=$10,addons_amount=$11,paid_amount=$12,downpayment_amount=downpayment_amount+$13${addonColumn?',addons_snapshot=$14::jsonb':''},updated_at=now() where id=$1 returning id,package_id as "packageId",paid_amount as "paidAmount",downpayment_amount as "downpaymentAmount",status`,[body.id,eventName,body.date||'',body.startTime||'',body.endTime||'',body.venue||'',body.mapsUrl||'',total/100,body.status,packageId,addonAmount/100,paid/100,depositAmount/100,...(addonColumn?[JSON.stringify(addonSnapshot)]:[])]);
+  const saved=await db.query(`update public.bookings set event_name=$2,event_date=nullif($3,'')::date,start_time=nullif($4,'')::time,end_time=nullif($5,'')::time,event_end_date=case when event_date is distinct from nullif($3,'')::date or end_time is distinct from nullif($5,'')::time then null else event_end_date end,venue=nullif($6,''),maps_url=nullif($7,''),total_amount=$8,status=$9,package_id=$10,addons_amount=$11,paid_amount=$12,downpayment_amount=downpayment_amount+$13${addonColumn?',addons_snapshot=$14::jsonb':''},updated_at=now() where id=$1 returning id,package_id as "packageId",paid_amount as "paidAmount",downpayment_amount as "downpaymentAmount",status`,[body.id,eventName,body.date||'',body.startTime||'',body.endTime||'',body.venue||'',body.mapsUrl||'',total/100,body.status,packageId,addonAmount/100,paid/100,depositAmount/100,...(addonColumn?[JSON.stringify(addonSnapshot)]:[])]);
   const paymentReference=depositAmount?`booking-deposit:${body.id}:${randomUUID()}`:null;
   if(paymentReference)await postBookingDownpayment(db,{bookingId:body.id,eventName,amount:depositAmount/100,date:deposit.date,account,reference:paymentReference,externalReference:String(deposit.reference||''),actorId:auth.user!.id});
   await db.query("insert into public.audit_logs(actor_id,action,entity_type,entity_id,metadata) values($1,'BOOKING_UPDATE','bookings',$2,$3::jsonb)",[auth.user!.id,body.id,JSON.stringify({before:{status:current.status,total:current.total_amount,packageId:current.package_id,addons:oldAddons},after:{status:body.status,total:total/100,packageId,addons:addonSnapshot},paymentReference})]);

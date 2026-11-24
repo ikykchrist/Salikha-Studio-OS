@@ -1,6 +1,7 @@
 import { requireUser } from "../../../lib/auth";
 import { getLocalPostgresPool } from "../../../lib/local-postgres";
 import { staffRoles, type StaffBooking, type StaffEvent, type StaffMember, type StaffProfile } from "../../../lib/staff-roster";
+import { linkStaffAssignment, lockStaffSchedule, staffMemberAvailable, staffScheduleBooking } from "../../../lib/staff-schedule";
 import { staffPhotoMaxBytes, staffPhotoMaxEdge } from "../../../lib/staff-profile-photo";
 import { cents, todayManila, uuid } from "../../../lib/workflow-validation";
 
@@ -92,13 +93,13 @@ export async function GET(request: Request) {
       db.query<StaffMember>(`
         select s.id, s.name, s.address, s.phone, s.email, s.facebook_url as "facebookUrl", s.assignment,
           s.profile_photo_updated_at::text as "photoVersion",
-          count(b.id) filter (where b.status <> 'CANCELLED')::int as "eventCount",
-          count(b.id) filter (where b.status in ('PENDING', 'CONFIRMED') and b.event_date >= $1::date)::int as "upcomingCount",
+          count(b.id) filter (where a.scheduled and b.status <> 'CANCELLED')::int as "eventCount",
+          count(b.id) filter (where a.scheduled and b.status in ('PENDING', 'CONFIRMED') and b.event_date >= $1::date)::int as "upcomingCount",
           coalesce(sum(a.received_amount), 0)::text as "totalReceived",
           coalesce(json_agg(json_build_object(
             'id', a.id, 'bookingId', a.booking_id, 'eventName', coalesce(b.event_name, a.event_name),
             'eventDate', case when b.id is null then a.event_date else b.event_date end,
-            'status', coalesce(b.status::text, 'REMOVED'), 'receivedAmount', a.received_amount::text
+            'status', case when not a.scheduled then 'UNASSIGNED' else coalesce(b.status::text, 'REMOVED') end, 'receivedAmount', a.received_amount::text
           ) order by case when b.id is null then a.event_date else b.event_date end desc nulls last, a.id)
           filter (where a.id is not null), '[]'::json) as events
         from public.staff_members s
@@ -118,23 +119,45 @@ export async function GET(request: Request) {
 
 async function updateEvent(input: Record<string, unknown>) {
   const db = getLocalPostgresPool();
-  if (input.action === "assign") {
-    if (!uuid(input.staffId) || !uuid(input.bookingId)) return failure("Choose a staff member and a booking.");
-    const result = await db.query(`
-      insert into public.staff_event_assignments (staff_id, booking_id, event_name, event_date)
-      select s.id, b.id, b.event_name, b.event_date from public.staff_members s cross join public.bookings b
-      where s.id = $1 and b.id = $2 and b.status <> 'CANCELLED'
-      on conflict (staff_id, booking_id) do update set booking_id = excluded.booking_id
-      returning id`, [input.staffId, input.bookingId]);
-    return result.rowCount ? Response.json({ saved: true }, { headers }) : failure("That staff member or booking is unavailable.", 404);
+  if (input.action === "assign" || input.action === "unassign") {
+    const assign = input.action === "assign";
+    if (assign ? !uuid(input.staffId) || !uuid(input.bookingId) : !uuid(input.id)) {
+      return failure("Choose a staff member and a booking.");
+    }
+    const client = await db.connect();
+    let committed = false;
+    try {
+      await client.query("begin");
+      await lockStaffSchedule(client);
+      if (assign) {
+        const booking = await staffScheduleBooking(client, input.bookingId as string, true);
+        if (!booking || booking.status === "CANCELLED") return failure("That booking is unavailable.", 404);
+        const staffId = input.staffId as string;
+        const operator = await staffMemberAvailable(client, booking, staffId);
+        if (!operator) return failure("That staff member is unavailable.", 404);
+        if (!operator.available) return failure("This staff member already has an event on that date.", 409);
+        await linkStaffAssignment(client, booking.id, staffId, false);
+      } else {
+        const result = await client.query<{ booking_id: string | null; staff_id: string }>(
+          "delete from public.staff_event_assignments where id = $1 and received_amount = 0 returning booking_id, staff_id", [input.id],
+        );
+        const removed = result.rows[0];
+        if (!removed) return failure("Only assignments with no recorded payout can be removed.", 409);
+        if (removed.booking_id) {
+          await client.query(`update public.bookings set preparation_operator_id=null, preparation_operator_name=null, updated_at=now()
+            where id=$1 and preparation_operator_id=$2`, [removed.booking_id, removed.staff_id]);
+        }
+      }
+      await client.query("commit");
+      committed = true;
+      return Response.json({ saved: true }, { headers });
+    } finally {
+      if (!committed) await client.query("rollback").catch(() => {});
+      client.release();
+    }
   }
 
   if (!uuid(input.id)) return failure("Choose an event assignment.");
-  if (input.action === "unassign") {
-    const result = await db.query("delete from public.staff_event_assignments where id = $1 and received_amount = 0", [input.id]);
-    return result.rowCount ? Response.json({ saved: true }, { headers }) : failure("Only assignments with no recorded payout can be removed.", 409);
-  }
-
   if (input.action === "payout") {
     let amount: number;
     try { amount = cents(input.receivedAmount); }
