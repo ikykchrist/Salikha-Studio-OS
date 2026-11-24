@@ -4,7 +4,8 @@ import { useEffect, useState, type FormEvent } from "react";
 import { ExternalLink, Plus, Search, Users } from "lucide-react";
 import { formatManilaDate } from "../lib/manila-datetime";
 import { staffRoles, type StaffBooking, type StaffMember } from "../lib/staff-roster";
-import { compressStaffPhoto } from "../lib/staff-profile-photo";
+import { centeredStaffPhoto } from "../lib/staff-profile-photo";
+import { StaffPhotoEditor, type StaffPhotoDraft } from "./staff-photo-editor";
 import { money } from "../lib/workflow-validation";
 
 type Roster = { staff: StaffMember[]; bookings: StaffBooking[] };
@@ -42,8 +43,8 @@ export function StaffRoster() {
   const [notice, setNotice] = useState("");
   const [retry, setRetry] = useState(0);
   const [profilePhoto, setProfilePhoto] = useState<string | null>();
-  const [compressing, setCompressing] = useState(false);
-  const [photoError, setPhotoError] = useState("");
+  const [photoDraft, setPhotoDraft] = useState<StaffPhotoDraft | null>(null);
+  const [lastPhotoDraft, setLastPhotoDraft] = useState<StaffPhotoDraft | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -60,24 +61,12 @@ export function StaffRoster() {
   const initial = editing === "edit" ? selected : undefined;
   const currentPhoto = initial ? staffPhotoUrl(initial) : null;
   const previewPhoto = profilePhoto === undefined ? currentPhoto : profilePhoto;
-  const busy = saving || compressing;
+  const busy = saving || Boolean(photoDraft);
 
   function openProfile(mode: "new" | "edit") {
     setProfilePhoto(undefined);
-    setPhotoError("");
+    setLastPhotoDraft(null);
     setEditing(mode);
-  }
-
-  async function preparePhoto(file: File) {
-    setCompressing(true);
-    setPhotoError("");
-    try {
-      setProfilePhoto(await compressStaffPhoto(file));
-    } catch (failure) {
-      setPhotoError(failure instanceof Error ? failure.message : "Couldn't process the photo.");
-    } finally {
-      setCompressing(false);
-    }
   }
 
   async function save(fields: Record<string, unknown>, success: string) {
@@ -148,12 +137,15 @@ export function StaffRoster() {
                   <input type="file" accept="image/*" disabled={busy} onChange={(event) => {
                     const file = event.currentTarget.files?.[0];
                     event.currentTarget.value = "";
-                    if (file) void preparePhoto(file);
+                    if (file) setPhotoDraft({ source: file, framing: centeredStaffPhoto });
                   }} />
                 </label>
-                {compressing && <p role="status">Compressing photo…</p>}
-                {photoError && <p role="alert">{photoError}</p>}
-                {previewPhoto && <button type="button" className="text-button" disabled={busy} onClick={() => { setPhotoError(""); setProfilePhoto(null); }}>Remove photo</button>}
+                {previewPhoto && <div className="roster-photo-links">
+                  <button type="button" className="text-button" disabled={busy}
+                    onClick={() => setPhotoDraft(lastPhotoDraft ?? { source: previewPhoto, framing: centeredStaffPhoto })}>Adjust framing</button>
+                  <button type="button" className="text-button" disabled={busy}
+                    onClick={() => { setProfilePhoto(null); setLastPhotoDraft(null); }}>Remove photo</button>
+                </div>}
               </div>
             </div>
             <label>Full name<input name="name" defaultValue={initial?.name} required maxLength={120} /></label>
@@ -221,5 +213,10 @@ export function StaffRoster() {
         </> : <div className="empty-state"><div className="empty-mark"><Users aria-hidden="true" /></div><h3>Add your first staff member</h3><p>Profiles, assignments, and payouts will appear here.</p><button type="button" className="secondary-button" onClick={() => openProfile("new")}>Add staff</button></div>}
       </section>
     </div>}
+    {photoDraft && <StaffPhotoEditor draft={photoDraft} onCancel={() => setPhotoDraft(null)} onApply={(photo, framing) => {
+      setProfilePhoto(photo);
+      setLastPhotoDraft({ source: photoDraft.source, framing });
+      setPhotoDraft(null);
+    }} />}
   </>;
 }

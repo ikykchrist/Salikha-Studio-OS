@@ -931,3 +931,16 @@ button:not(:disabled):active { transform: scale(.985); }
 .roster-photo-field input { max-width: 100%; }
 .roster-photo-field p { color: var(--muted); font-size: 12px; margin: 5px 0 0; }
 .roster-photo-field .text-button { margin-top: 5px; }
+.roster-photo-links { display: flex; flex-wrap: wrap; gap: 10px; }
+.staff-photo-editor { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; color: var(--ink); max-height: calc(100dvh - 24px); padding: 20px; width: min(420px, calc(100% - 24px)); }
+.staff-photo-editor::backdrop { background: rgb(0 0 0 / 65%); }
+.staff-photo-editor h2 { font-size: 19px; margin: 0; }
+.staff-photo-editor p { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 6px 0 12px; }
+.staff-photo-preview { aspect-ratio: 1; background: #fff; cursor: grab; margin: 3px auto 0; max-width: 298px; overflow: hidden; position: relative; touch-action: none; user-select: none; width: 100%; }
+.staff-photo-preview:active { cursor: grabbing; }
+.staff-photo-preview img { max-width: none; pointer-events: none; position: absolute; }
+.staff-photo-guide { border: 1px solid rgb(255 255 255 / 85%); border-radius: 50%; box-shadow: 0 0 0 240px rgb(0 0 0 / 60%); inset: 0; pointer-events: none; position: absolute; }
+.staff-photo-zoom { align-items: center; display: flex; font-size: 13px; gap: 12px; margin: 14px auto; max-width: 298px; }
+.staff-photo-zoom input { accent-color: var(--accent); flex: 1; min-width: 0; }
+.staff-photo-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+.staff-photo-actions .text-button { margin-right: auto; }
