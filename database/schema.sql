@@ -5,6 +5,7 @@ drop table if exists public.google_calendar_connections cascade;
 drop table if exists public.invoice_email_connections cascade;
 drop table if exists public.system_sessions cascade;
 drop table if exists public.dashboard_reminders cascade;
+drop table if exists public.calendar_date_blocks cascade;
 drop table if exists public.system_users cascade;
 drop table if exists public.booking_consumable_usage cascade;
 drop table if exists public.calendar_events cascade;
@@ -565,3 +566,14 @@ create table if not exists public.dashboard_reminders (
 );
 create index if not exists dashboard_reminders_open_idx on public.dashboard_reminders(created_at desc) where completed_at is null;
 alter table public.dashboard_reminders enable row level security;
+
+
+create table if not exists public.calendar_date_blocks (
+  event_date date not null,
+  service text not null check (service in ('Photobooth', 'Photoman', 'Coverage')),
+  blocked_by uuid references public.system_users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  primary key (event_date, service)
+);
+
+alter table public.calendar_date_blocks enable row level security;

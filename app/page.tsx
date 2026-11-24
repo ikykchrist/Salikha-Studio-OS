@@ -20,6 +20,8 @@ import {preparationReady,preparationProgress,type Preparation} from "../lib/book
 import { BookingPreparationForm } from "./booking-preparation-form";
 import { MaintenanceActionForm } from "./maintenance-action-form";
 import { GoogleCalendarControls } from "./google-calendar-controls";
+import { useCalendarAvailability } from "./use-calendar-availability";
+import { calendarServices, calendarServiceLabels, type BlockScope } from "../lib/calendar-date-blocks";
 import { GoogleCalendarSettings as GoogleCalendarSetupSettings } from "./google-calendar-settings";
 import { TelegramSettings } from "./telegram-settings";
 import { MoneyWorkspace, MoneyActionForm } from "./money-workspace";
@@ -215,7 +217,7 @@ export default function Home() {
         </header>
 
         <div className="page-content" key={activeView}>
-           {activeView === "Assistant" && authUser.role === "ADMIN" ? <AiAssistant /> : activeView === "Team" && authUser.role === "ADMIN" ? <TeamView currentUser={authUser} /> : activeView === "Invoices" && authUser.role === "ADMIN" ? <InvoicesView /> : activeView === "Bookings" ? <BookingsView isAdmin={authUser.role === "ADMIN"} showForm={showBookingForm} onShowForm={setShowBookingForm} onNavigate={setActiveView} /> : activeView === "Clients" ? <ClientsView /> : activeView === "Calendar" ? <CalendarView /> : activeView === "Cashflow" ? <MoneyWorkspace key="cash" /> : activeView === "Inventory" ? <InventoryView onNavigate={setActiveView} isAdmin={authUser.role === "ADMIN"} /> : activeView === "Equipment" ? <EquipmentView /> : activeView === "Packages" ? <PackagesView onNavigate={setActiveView} onCreateBooking={() => { setActiveView("Bookings"); setShowBookingForm(true); }} /> : activeView === "Analytics" ? <BusinessAnalyticsView /> : activeView === "Reports" ? <FinancialReports /> : activeView === "Settings" ? <SettingsView user={authUser} /> : <>
+           {activeView === "Assistant" && authUser.role === "ADMIN" ? <AiAssistant /> : activeView === "Team" && authUser.role === "ADMIN" ? <TeamView currentUser={authUser} /> : activeView === "Invoices" && authUser.role === "ADMIN" ? <InvoicesView /> : activeView === "Bookings" ? <BookingsView isAdmin={authUser.role === "ADMIN"} showForm={showBookingForm} onShowForm={setShowBookingForm} onNavigate={setActiveView} /> : activeView === "Clients" ? <ClientsView /> : activeView === "Calendar" ? <CalendarView isAdmin={authUser.role === "ADMIN"} /> : activeView === "Cashflow" ? <MoneyWorkspace key="cash" /> : activeView === "Inventory" ? <InventoryView onNavigate={setActiveView} isAdmin={authUser.role === "ADMIN"} /> : activeView === "Equipment" ? <EquipmentView /> : activeView === "Packages" ? <PackagesView onNavigate={setActiveView} onCreateBooking={() => { setActiveView("Bookings"); setShowBookingForm(true); }} /> : activeView === "Analytics" ? <BusinessAnalyticsView /> : activeView === "Reports" ? <FinancialReports /> : activeView === "Settings" ? <SettingsView user={authUser} /> : <>
           <section className="page-heading">
             <div>
               <p className="eyebrow">{todayLabel}</p>
@@ -466,10 +468,16 @@ function ClientForm({ initial, clients, onClose, onSave }: { initial: ClientReco
   </form></div>;
 }
 
-function CalendarView() {
-  const today = new Date();
-  const [viewDate, setViewDate] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
-  const [selectedDay, setSelectedDay] = useState(today.getDate());
+function CalendarView({ isAdmin }: { isAdmin: boolean }) {
+  const todayKey = manilaDateKey(new Date());
+  const [todayYear, todayMonth, todayDay] = todayKey.split("-").map(Number);
+  const [viewDate, setViewDate] = useState(() => new Date(todayYear, todayMonth - 1, 1));
+  const [selectedDay, setSelectedDay] = useState(todayDay);
+  const [manageAvailability, setManageAvailability] = useState(false);
+  const [selectedDates, setSelectedDates] = useState<string[]>([]);
+  const [scope, setScope] = useState<BlockScope>("All");
+  const [saving, setSaving] = useState(false);
+  const [availabilityMessage, setAvailabilityMessage] = useState<{ text: string; error?: boolean }>();
   const [packageLegend, setPackageLegend] = useState<Array<{ id: string; name: string; color: string }>>([]);
   const [bookings, setBookings] = useState<Array<{ id: string; package_id: string | null; package_name?: string; package_color: string; event_name: string; event_date: string | null; start_time: string | null; end_time: string | null; venue: string | null; maps_url: string | null; status: string; clients: { display_name: string } | null }>>([]);
   useEffect(() => { let cancelled = false; const database = getLocalDatabase(); if (!database) return; void (async () => { const [bookingResult, packageResult] = await Promise.all([database.from("bookings").select("id, package_id, event_name, event_date, start_time, end_time, venue, maps_url, status, clients(display_name)"), database.from("service_packages").select("id, name, calendar_color")]); if (cancelled || bookingResult.error || packageResult.error || !bookingResult.data || !packageResult.data) return; const packageRows = packageResult.data as Array<{ id: string; name: string; calendar_color: string | null }>; setPackageLegend(packageRows.map((item) => ({ id: item.id, name: item.name, color: item.calendar_color || DEFAULT_PACKAGE_CALENDAR_COLOR }))); const packageById = new Map(packageRows.map((item) => [item.id, item])); setBookings((bookingResult.data as unknown as Array<Omit<(typeof bookings)[number], "package_name" | "package_color">>).map((booking) => { const pack = booking.package_id ? packageById.get(booking.package_id) : undefined; return { ...booking, event_date: bookingDateInput(booking.event_date), package_name: pack?.name || "Custom service", package_color: pack?.calendar_color || DEFAULT_PACKAGE_CALENDAR_COLOR }; })); })(); return () => { cancelled = true; }; }, []);
@@ -477,16 +485,104 @@ function CalendarView() {
   const firstDay = new Date(year, month, 1).getDay(); const daysInMonth = new Date(year, month + 1, 0).getDate();
   const cells = Array.from({ length: 42 }, (_, index) => { const day = index - firstDay + 1; return day > 0 && day <= daysInMonth ? day : null; });
   const monthKey = `${year}-${String(month + 1).padStart(2, "0")}`;
-  const todayKey = manilaDateKey(today);
+  const dateKey = (day: number) => monthKey + "-" + String(day).padStart(2, "0");
+  const { blocks, error: availabilityError, refresh, save } = useCalendarAvailability(monthKey);
+  const selectedBlocks = blocks[dateKey(selectedDay)] ?? [];
   const calendarBookings = bookings.filter((booking) => booking.status === "PENDING" && booking.event_date && booking.start_time && booking.end_time && booking.event_date >= todayKey);
   const monthBookings = calendarBookings.filter((booking) => booking.event_date?.startsWith(monthKey));
   const bookingsByDay = monthBookings.reduce<Record<number, typeof bookings>>((acc, booking) => { const day = Number(booking.event_date?.slice(8, 10)); if (!acc[day]) acc[day] = []; acc[day].push(booking); return acc; }, {});
   const selectedDateBookings = [...(bookingsByDay[selectedDay] || [])].sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
   const goMonth = (offset: number) => { setViewDate(new Date(year, month + offset, 1)); setSelectedDay(1); };
-  return <><div className="calendar-crud-actions">{selectedDateBookings.slice(0, 1).map((booking) => <button className="secondary-button danger-button" type="button" key={booking.id} onClick={async () => { if (await showConfirm("Delete this calendar event and its booking? This cannot be undone.", {title:"Delete calendar event",danger:true})) void deleteRecord("bookings", booking.id); }}>Delete selected event</button>)}</div>
-    <section className="page-heading calendar-heading"><div><p className="eyebrow">Workspace / Calendar</p><h1>Calendar</h1><p className="subheading">See upcoming pending bookings, grouped by package color.</p></div></section>
+  async function saveSelection(action: "block" | "unblock") {
+    setSaving(true);
+    setAvailabilityMessage(undefined);
+    try {
+      await save(selectedDates, scope, action);
+      const service = scope === "All" ? "all services" : calendarServiceLabels[scope];
+      setAvailabilityMessage({ text: action === "block" ? `Blocked ${selectedDates.length} date(s) for ${service}.` : `Removed ${service} blocks from ${selectedDates.length} date(s).` });
+      setSelectedDates([]);
+    } catch (error) {
+      setAvailabilityMessage({ text: error instanceof Error ? error.message : "Date blocks could not be saved.", error: true });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return <>
+    <div className="calendar-crud-actions">{selectedDateBookings.slice(0, 1).map((booking) => <button className="secondary-button danger-button" type="button" key={booking.id} onClick={async () => { if (await showConfirm("Delete this calendar event and its booking? This cannot be undone.", {title:"Delete calendar event",danger:true})) void deleteRecord("bookings", booking.id); }}>Delete selected event</button>)}</div>
+    <section className="page-heading calendar-heading">
+      <div><p className="eyebrow">Workspace / Calendar</p><h1>Calendar</h1><p className="subheading">See upcoming pending bookings and unavailable dates.</p></div>
+      {isAdmin && <button className="secondary-button" type="button" aria-expanded={manageAvailability} disabled={saving} onClick={() => {
+        setManageAvailability(!manageAvailability);
+        setSelectedDates([]);
+        setAvailabilityMessage(undefined);
+      }}>{manageAvailability ? "Done managing availability" : "Manage availability"}</button>}
+    </section>
     <GoogleCalendarControls />
-    <section className="calendar-layout"><div className="calendar-panel panel"><div className="calendar-toolbar"><button className="calendar-nav" type="button" onClick={() => goMonth(-1)} aria-label="Previous month"><ChevronLeft aria-hidden="true" /></button><h2>{monthName}</h2><button className="calendar-nav" type="button" onClick={() => goMonth(1)} aria-label="Next month"><ChevronRight aria-hidden="true" /></button><button className="today-button" type="button" onClick={() => { setViewDate(new Date(today.getFullYear(), today.getMonth(), 1)); setSelectedDay(today.getDate()); }}>Today</button></div><div className="calendar-weekdays">{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => <span key={day}>{day}</span>)}</div><div className="calendar-grid">{cells.map((day, index) => <button className={`calendar-day ${day === selectedDay ? "selected" : ""} ${day === today.getDate() && month === today.getMonth() && year === today.getFullYear() ? "today" : ""}`} key={`${year}-${month}-${index}`} type="button" disabled={!day} aria-label={day ? `${monthName} ${day}${bookingsByDay[day] ? `, ${bookingsByDay[day].length} events` : ""}` : undefined} onClick={() => day && setSelectedDay(day)}>{day && <><span>{day}</span>{bookingsByDay[day]?.slice(0, 2).map((booking) => <i className="calendar-event-chip" key={booking.id} style={{ backgroundColor: booking.package_color }} title={`${booking.event_name} · ${booking.package_name}`}>{booking.event_name}</i>)}{(bookingsByDay[day]?.length || 0) > 2 && <small className="calendar-more">+{bookingsByDay[day].length - 2} more</small>}</>}</button>)}</div></div><aside className="agenda-panel panel"><div className="panel-heading"><div><p className="eyebrow">Agenda</p><h2>{monthName}</h2></div><span className="count-badge">{monthBookings.length} events</span></div><div className="agenda-date"><strong>{selectedDay}</strong><span>{new Date(year, month, selectedDay).toLocaleDateString("en-US", { weekday: "long", month: "long" })}</span></div>{selectedDateBookings.length === 0 ? <div className="empty-state calendar-empty"><div className="empty-mark"><CalendarDays aria-hidden="true" /></div><h3>No events scheduled</h3><p>Upcoming pending bookings for this date will appear here.</p></div> : <div className="agenda-list">{selectedDateBookings.map((booking) => <article className="agenda-item" key={booking.id}><div className="agenda-event-title"><strong style={{ backgroundColor: booking.package_color }}>{booking.event_name}</strong><span>{booking.package_name}</span></div><div className="agenda-event-details"><span><small>Date</small><strong>{bookingDateLabel(booking.event_date)}</strong></span><span><small>Time</small><strong>{booking.start_time && booking.end_time ? `${bookingTimeLabel(booking.start_time)} – ${bookingTimeLabel(booking.end_time)}` : "TBA"}</strong></span><span><small>Venue</small><strong>{booking.venue || "Not set"}</strong></span></div></article>)}</div>}</aside></section>
+    {manageAvailability && <section className="panel calendar-availability" aria-label="Manage booking availability">
+      <div>
+        <h2>Block dates</h2>
+        <p>Select dates on the calendar. You can keep your selection when changing months.</p>
+      </div>
+      <div className="calendar-availability-controls">
+        <label>Service
+          <select className="filter-select" value={scope} onChange={(event) => setScope(event.target.value as BlockScope)} disabled={saving}>
+            <option value="All">Unavailable for All</option>
+            {calendarServices.map((service) => <option key={service} value={service}>Unavailable for {calendarServiceLabels[service]}</option>)}
+          </select>
+        </label>
+        <button className="primary-button" type="button" onClick={() => void saveSelection("block")} disabled={!selectedDates.length || saving}>Block selected dates</button>
+        <button className="secondary-button" type="button" onClick={() => void saveSelection("unblock")} disabled={!selectedDates.length || saving}>Remove selected blocks</button>
+      </div>
+      {selectedDates.length > 0 && <div className="calendar-availability-selection">
+        <strong>{selectedDates.length} selected</strong>
+        <ul aria-label="Selected dates">{[...selectedDates].sort().map((date) => (
+          <li key={date}><button type="button" disabled={saving} onClick={() => setSelectedDates((dates) => dates.filter((day) => day !== date))} aria-label={`Remove ${bookingDateLabel(date)} from selection`}>{bookingDateLabel(date)} <span aria-hidden="true">×</span></button></li>
+        ))}</ul>
+        <button className="secondary-button" type="button" disabled={saving} onClick={() => setSelectedDates([])}>Clear selection</button>
+      </div>}
+      {availabilityMessage && <p role={availabilityMessage.error ? "alert" : "status"}>{availabilityMessage.text}</p>}
+    </section>}
+    {availabilityError && <div className="calendar-availability-error" role="status">{availabilityError} <button className="secondary-button" onClick={refresh} type="button">Retry</button></div>}
+    <section className="calendar-layout">
+      <div className="calendar-panel panel">
+        <div className="calendar-toolbar">
+          <button className="calendar-nav" type="button" onClick={() => goMonth(-1)} aria-label="Previous month"><ChevronLeft aria-hidden="true" /></button>
+          <h2>{monthName}</h2>
+          <button className="calendar-nav" type="button" onClick={() => goMonth(1)} aria-label="Next month"><ChevronRight aria-hidden="true" /></button>
+          <button className="today-button" type="button" onClick={() => { setViewDate(new Date(todayYear, todayMonth - 1, 1)); setSelectedDay(todayDay); }}>Today</button>
+        </div>
+        <div className="calendar-weekdays">{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => <span key={day}>{day}</span>)}</div>
+        <div className="calendar-grid">{cells.map((day, index) => {
+          if (!day) return <span key={`blank-${index}`} />;
+          const date = dateKey(day);
+          const services = blocks[date] ?? [];
+          const all = services.length === calendarServices.length;
+          const blockLabel = all ? "Unavailable for All" : services.length ? "Unavailable for " + services.map((service) => calendarServiceLabels[service]).join(", ") : "";
+          const selected = manageAvailability ? selectedDates.includes(date) : day === selectedDay;
+          const events = bookingsByDay[day] ?? [];
+          return <button type="button" key={date}
+            className={`calendar-day ${selected ? "selected" : ""} ${date === todayKey ? "today" : ""} ${all ? "calendar-day-fully-blocked" : ""}`}
+            disabled={manageAvailability && saving} aria-pressed={selected} aria-current={date === todayKey ? "date" : undefined}
+            aria-label={[`${monthName} ${day}`, events.length ? `${events.length} events` : "", blockLabel].filter(Boolean).join(", ")}
+            onClick={() => {
+              setSelectedDay(day);
+              if (manageAvailability) setSelectedDates((dates) => dates.includes(date) ? dates.filter((item) => item !== date) : [...dates, date]);
+            }}>
+            <span>{day}</span>
+            {blockLabel && <i className="calendar-event-chip calendar-block-chip" title={blockLabel}>{all ? "All blocked" : services.map((service) => calendarServiceLabels[service]).join(", ")}</i>}
+            {events.slice(0, 2).map((booking) => <i className="calendar-event-chip" key={booking.id} style={{ backgroundColor: booking.package_color }} title={`${booking.event_name} · ${booking.package_name}`}>{booking.event_name}</i>)}
+            {events.length > 2 && <small className="calendar-more">+{events.length - 2} more</small>}
+          </button>;
+        })}</div>
+      </div>
+      <aside className="agenda-panel panel">
+        <div className="panel-heading"><div><p className="eyebrow">Agenda</p><h2>{monthName}</h2></div><span className="count-badge">{monthBookings.length} events</span></div>
+        <div className="agenda-date"><strong>{selectedDay}</strong><span>{new Date(year, month, selectedDay).toLocaleDateString("en-US", { weekday: "long", month: "long" })}</span></div>
+        {selectedBlocks.length > 0 && <p className="calendar-agenda-blocks">{selectedBlocks.length === calendarServices.length ? "Unavailable for All" : "Unavailable for " + selectedBlocks.map((service) => calendarServiceLabels[service]).join(", ")}</p>}
+        {selectedDateBookings.length === 0 ? <div className="empty-state calendar-empty"><div className="empty-mark"><CalendarDays aria-hidden="true" /></div><h3>No events scheduled</h3><p>Upcoming pending bookings for this date will appear here.</p></div> : <div className="agenda-list">{selectedDateBookings.map((booking) => <article className="agenda-item" key={booking.id}><div className="agenda-event-title"><strong style={{ backgroundColor: booking.package_color }}>{booking.event_name}</strong><span>{booking.package_name}</span></div><div className="agenda-event-details"><span><small>Date</small><strong>{bookingDateLabel(booking.event_date)}</strong></span><span><small>Time</small><strong>{booking.start_time && booking.end_time ? `${bookingTimeLabel(booking.start_time)} – ${bookingTimeLabel(booking.end_time)}` : "TBA"}</strong></span><span><small>Venue</small><strong>{booking.venue || "Not set"}</strong></span></div></article>)}</div>}
+      </aside>
+    </section>
     <section className="calendar-legend">{packageLegend.length ? packageLegend.map((item) => <span key={item.id}><i className="legend-swatch" style={{ backgroundColor: item.color }} />{item.name}</span>) : <span className="legend-empty">No packages in catalog</span>}<span className="legend-note">Pending events · Asia/Manila</span></section>
   </>;
 }
