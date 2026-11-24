@@ -43,20 +43,25 @@ const availableStaff = `not exists (
     )
 )`;
 
-export async function availableOperators(db: Database, booking: StaffScheduleBooking) {
+export async function availableOperators(db: Database, booking: StaffScheduleBooking, selectedIds: string[]) {
   if (!booking.eventDate || !scheduledBookingStatuses.includes(booking.status)) return [];
   const { rows } = await db.query<OperatorOption>(`
     select s.id, s.name, s.assignment from public.staff_members s
-    where ${availableStaff} or s.id = $4::uuid
-    order by lower(s.name), s.id`, [booking.id, booking.eventDate, booking.lastDate, booking.operatorId]);
+    where ${availableStaff} or s.id = any($4::uuid[])
+    order by lower(s.name), s.id`, [booking.id, booking.eventDate, booking.lastDate, selectedIds]);
+  return rows;
+}
+
+export async function checkStaffAvailability(db: Database, booking: StaffScheduleBooking, staffIds: string[]) {
+  const { rows } = await db.query<{ id: string; name: string; available: boolean }>(`
+    select s.id, s.name, ${availableStaff} as available from public.staff_members s where s.id = any($4::uuid[])`,
+    [booking.id, booking.eventDate, booking.lastDate, staffIds]);
   return rows;
 }
 
 export async function staffMemberAvailable(db: Database, booking: StaffScheduleBooking, staffId: string) {
-  const { rows } = await db.query<{ name: string; available: boolean }>(`
-    select s.name, ${availableStaff} as available from public.staff_members s where s.id = $4`,
-    [booking.id, booking.eventDate, booking.lastDate, staffId]);
-  return rows[0];
+  const [staff] = await checkStaffAvailability(db, booking, [staffId]);
+  return staff;
 }
 
 export async function bookingStaffConflict(db: Database, id: string, newDate: string) {
@@ -71,11 +76,12 @@ export async function bookingStaffConflict(db: Database, id: string, newDate: st
 
 export async function linkStaffAssignment(db: PoolClient, bookingId: string, staffId: string, preparationOnly: boolean) {
   const { rowCount } = await db.query(`
-    insert into public.staff_event_assignments (staff_id, booking_id, event_name, event_date, preparation_only)
-    select s.id, b.id, b.event_name, b.event_date, $3 from public.staff_members s cross join public.bookings b
+    insert into public.staff_event_assignments (staff_id, booking_id, event_name, event_date, preparation_only, preparation_selected)
+    select s.id, b.id, b.event_name, b.event_date, $3, $3 from public.staff_members s cross join public.bookings b
     where s.id = $1 and b.id = $2 and b.status <> 'CANCELLED'
     on conflict (staff_id, booking_id) do update set
       scheduled = true,
+      preparation_selected = staff_event_assignments.preparation_selected or excluded.preparation_selected,
       preparation_only = (not staff_event_assignments.scheduled or staff_event_assignments.preparation_only) and excluded.preparation_only
     returning id`, [staffId, bookingId, preparationOnly]);
   return Boolean(rowCount);
@@ -84,8 +90,18 @@ export async function linkStaffAssignment(db: PoolClient, bookingId: string, sta
 export async function releasePreparationAssignment(db: PoolClient, bookingId: string, staffId: string) {
   await db.query(`
     delete from public.staff_event_assignments
-    where booking_id=$1 and staff_id=$2 and preparation_only and received_amount=0`, [bookingId, staffId]);
+    where booking_id=$1 and staff_id=$2 and preparation_selected and preparation_only and received_amount=0`, [bookingId, staffId]);
   await db.query(`
-    update public.staff_event_assignments set scheduled=false
-    where booking_id=$1 and staff_id=$2 and preparation_only`, [bookingId, staffId]);
+    update public.staff_event_assignments set scheduled=not preparation_only, preparation_selected=false
+    where booking_id=$1 and staff_id=$2 and preparation_selected`, [bookingId, staffId]);
+}
+
+
+export async function preparationOperators(db: Database, bookingId: string) {
+  const { rows } = await db.query<OperatorOption>(`
+    select s.id, s.name, s.assignment from public.staff_event_assignments a
+    join public.staff_members s on s.id = a.staff_id
+    where a.booking_id = $1 and a.preparation_selected and a.scheduled
+    order by lower(s.name), s.id`, [bookingId]);
+  return rows;
 }

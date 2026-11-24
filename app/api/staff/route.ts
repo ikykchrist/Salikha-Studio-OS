@@ -1,7 +1,7 @@
 import { requireUser } from "../../../lib/auth";
 import { getLocalPostgresPool } from "../../../lib/local-postgres";
 import { staffRoles, type StaffBooking, type StaffEvent, type StaffMember, type StaffProfile } from "../../../lib/staff-roster";
-import { linkStaffAssignment, lockStaffSchedule, staffMemberAvailable, staffScheduleBooking } from "../../../lib/staff-schedule";
+import { linkStaffAssignment, lockStaffSchedule, preparationOperators, staffMemberAvailable, staffScheduleBooking } from "../../../lib/staff-schedule";
 import { staffPhotoMaxBytes, staffPhotoMaxEdge } from "../../../lib/staff-profile-photo";
 import { cents, todayManila, uuid } from "../../../lib/workflow-validation";
 
@@ -138,14 +138,15 @@ async function updateEvent(input: Record<string, unknown>) {
         if (!operator.available) return failure("This staff member already has an event on that date.", 409);
         await linkStaffAssignment(client, booking.id, staffId, false);
       } else {
-        const result = await client.query<{ booking_id: string | null; staff_id: string }>(
-          "delete from public.staff_event_assignments where id = $1 and received_amount = 0 returning booking_id, staff_id", [input.id],
+        const result = await client.query<{ booking_id: string | null; preparation_selected: boolean }>(
+          "delete from public.staff_event_assignments where id = $1 and received_amount = 0 returning booking_id, preparation_selected", [input.id],
         );
         const removed = result.rows[0];
         if (!removed) return failure("Only assignments with no recorded payout can be removed.", 409);
-        if (removed.booking_id) {
-          await client.query(`update public.bookings set preparation_operator_id=null, preparation_operator_name=null, updated_at=now()
-            where id=$1 and preparation_operator_id=$2`, [removed.booking_id, removed.staff_id]);
+        if (removed.booking_id && removed.preparation_selected) {
+          const remaining = await preparationOperators(client, removed.booking_id);
+          await client.query(`update public.bookings set preparation_operator_id=$2, preparation_operator_name=$3, updated_at=now()
+            where id=$1`, [removed.booking_id, remaining[0]?.id ?? null, remaining.map(({ name }) => name).join(", ") || null]);
         }
       }
       await client.query("commit");

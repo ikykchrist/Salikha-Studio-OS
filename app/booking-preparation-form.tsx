@@ -10,8 +10,8 @@ type OperatorChoices = {
   operators: OperatorOption[];
   scheduledDate: string | null;
   canAssign: boolean;
-  operatorId: string | null;
-  operatorName: string | null;
+  assigned: OperatorOption[];
+  legacyName: string | null;
 };
 
 export function BookingPreparationForm({ bookingId, bookingName, preparation, onClose, onSave }: {
@@ -27,7 +27,7 @@ export function BookingPreparationForm({ bookingId, bookingName, preparation, on
   const [suppliesPacked, setSuppliesPacked] = useState(preparation.suppliesPacked ?? false);
   const [equipmentChecked, setEquipmentChecked] = useState(preparation.equipmentChecked ?? false);
   const [choices, setChoices] = useState<OperatorChoices>();
-  const [selection, setSelection] = useState<string>();
+  const [selection, setSelection] = useState<string[]>();
   const [choicesError, setChoicesError] = useState("");
   const [revision, setRevision] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -48,23 +48,25 @@ export function BookingPreparationForm({ bookingId, bookingName, preparation, on
   }, [bookingId, revision]);
 
   const operators = choices?.operators ?? [];
-  const currentId = choices ? choices.operatorId : preparation.operatorId;
-  const currentName = choices ? choices.operatorName : preparation.operatorName;
-  const initialValue = currentId || (currentName ? "legacy" : "");
-  const value = selection ?? initialValue;
-  const operatorId = selection === undefined || selection === "legacy" ? undefined : selection || null;
-  const operatorName = value === initialValue ? operators.find((operator) => operator.id === value)?.name ?? currentName
-    : operators.find((operator) => operator.id === value)?.name;
-  const current = { layoutReady, venueReady, backdropColor: backdropColor || null, suppliesPacked, equipmentChecked, operatorName, operatorId };
+  const assigned = choices?.assigned ?? [];
+  const selectedIds = selection ?? (choices ? assigned.map(({ id }) => id) : preparation.operatorIds ?? []);
+  const selected = selectedIds.map((id) => assigned.find((operator) => operator.id === id) ?? operators.find((operator) => operator.id === id))
+    .filter((operator): operator is OperatorOption => Boolean(operator));
+  const legacyName = selection === undefined ? choices?.legacyName : null;
+  const available = operators.filter(({ id }) => !selectedIds.includes(id));
+  const operatorName = choices ? selected.map(({ name }) => name).join(", ") || legacyName : preparation.operatorName;
+  const current = {
+    layoutReady, venueReady, backdropColor: backdropColor || null, suppliesPacked, equipmentChecked,
+    operatorName, operatorIds: selection,
+  };
   const ready = preparationReady(current);
   const canChoose = Boolean(choices?.scheduledDate && choices.canAssign);
-  const currentMissing = initialValue && !operators.some((operator) => operator.id === initialValue);
 
-  let operatorHint = "Choose an available staff member from the roster.";
+  let operatorHint = "Add available roster staff for this event.";
   if (!choices) operatorHint = choicesError || "Checking staff availability…";
   else if (!choices.scheduledDate) operatorHint = "Set the event date to see available operators.";
   else if (!choices.canAssign) operatorHint = "Operator assignment is closed for this booking.";
-  else if (!operators.length) operatorHint = "No roster staff are available for this date.";
+  else if (!available.length) operatorHint = "No more roster staff are available for this date.";
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -93,15 +95,28 @@ export function BookingPreparationForm({ bookingId, bookingName, preparation, on
           <label><input type="checkbox" checked={venueReady} onChange={(event) => setVenueReady(event.target.checked)} /><span><strong>Venue is ready</strong><small>Venue details, access, and setup area have been confirmed.</small></span></label>
           <label><input type="checkbox" checked={suppliesPacked} onChange={(event) => setSuppliesPacked(event.target.checked)} /><span><strong>Supplies packed</strong><small>Paper, ink, frames, and other event supplies are packed.</small></span></label>
           <label><input type="checkbox" checked={equipmentChecked} onChange={(event) => setEquipmentChecked(event.target.checked)} /><span><strong>Equipment checked</strong><small>Test cameras, printer, lights, cables, and backup equipment.</small></span></label>
-          <label className="backdrop-color-field">
-            <span><strong>Assigned operator</strong><small id="operator-hint">{operatorHint}</small></span>
-            <select className="backdrop-color-text" aria-label="Assigned operator" aria-describedby="operator-hint"
-              value={value} disabled={!canChoose || saving} onChange={(event) => setSelection(event.target.value)}>
-              <option value="">Unassigned</option>
-              {currentMissing && <option value={initialValue}>{currentName || "Current operator"}{initialValue === "legacy" ? " (existing name)" : ""}</option>}
-              {operators.map((operator) => <option key={operator.id} value={operator.id}>{operator.name} · {operator.assignment}</option>)}
-            </select>
-          </label>
+          <div className="preparation-operators">
+            <label className="backdrop-color-field">
+              <span><strong>Assigned operators</strong><small id="operator-hint">{operatorHint}</small></span>
+              <select className="backdrop-color-text" aria-label="Add an operator" aria-describedby="operator-hint"
+                value="" disabled={!canChoose || !available.length || saving} onChange={(event) => {
+                  if (event.target.value) setSelection([...selectedIds, event.target.value]);
+                }}>
+                <option value="">Add an operator</option>
+                {available.map((operator) => <option key={operator.id} value={operator.id}>{operator.name} · {operator.assignment}</option>)}
+              </select>
+            </label>
+            {(selected.length > 0 || legacyName) && <ul aria-label="Selected operators" className="preparation-operator-list">
+              {selected.map((operator) => <li key={operator.id}>
+                <span>{operator.name}</span>
+                <button type="button" disabled={saving} aria-label={`Remove ${operator.name}`}
+                  onClick={() => setSelection(selectedIds.filter((id) => id !== operator.id))}><X aria-hidden="true" size={13} /></button>
+              </li>)}
+              {legacyName && <li><span>{legacyName} (existing name)</span>
+                <button type="button" disabled={saving} aria-label={`Remove ${legacyName}`} onClick={() => setSelection([])}><X aria-hidden="true" size={13} /></button>
+              </li>}
+            </ul>}
+          </div>
           {choicesError && <button className="text-button" type="button" onClick={() => { setChoicesError(""); setRevision((value) => value + 1); }}>Retry staff availability</button>}
           <label className="backdrop-color-field">
             <span><strong>Backdrop color</strong><small>Type the color requested for this event (e.g. dusty rose, navy blue).</small></span>
@@ -111,7 +126,7 @@ export function BookingPreparationForm({ bookingId, bookingName, preparation, on
         </fieldset>
         <div className={`preparation-state ${ready ? "is-ready" : "is-pending"}`} role="status">
           <i /><span><strong>{ready ? "Ready for Deployment" : `${preparationProgress(current)} / 6 ready`}</strong>
-            <small>{ready ? "All required preparation checks are complete." : "Complete the checklist, assign an operator, and confirm the backdrop color."}</small></span>
+            <small>{ready ? "All required preparation checks are complete." : "Complete the checklist, assign operators, and confirm the backdrop color."}</small></span>
         </div>
         {error && <WarningNotice>{error}</WarningNotice>}
       </div>
